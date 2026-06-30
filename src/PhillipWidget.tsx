@@ -1,10 +1,11 @@
+import { AnimatePresence, LazyMotion, MotionConfig, domAnimation } from "motion/react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Tracker } from "./analytics/tracker";
 import { Bubble } from "./chat/Bubble";
 import { Composer } from "./chat/Composer";
 import { Conversation } from "./chat/Conversation";
-import { Panel } from "./chat/Panel";
 import { QuickReplies } from "./chat/QuickReplies";
+import { Stage } from "./chat/Stage";
 import { type ControlEvent, useConversation } from "./chat/useConversation";
 import { PhillipProvider } from "./core/PhillipProvider";
 import type { RuntimeConfig } from "./core/config";
@@ -20,6 +21,7 @@ import {
   useIteration,
 } from "./iteration";
 import { log } from "./lib/log";
+import { Vignette } from "./overlay/Vignette";
 import {
   CheckoutPanel,
   EscalationPanel,
@@ -81,6 +83,12 @@ function Ready({
   const [checkingOut, setCheckingOut] = useState(false);
   const openTriggerRef = useRef<PingReason | "manual">("manual");
   const openedRef = useRef(false);
+
+  // Opening the floating conversation — from a ping or the resting bubble.
+  const openConversation = (trigger: PingReason | "manual") => {
+    openTriggerRef.current = trigger;
+    setOpen(true);
+  };
 
   // Phase 03: route the classified intent through the funnel.
   const onIntent = (intent: Intent, sentiment?: Sentiment) => {
@@ -177,7 +185,9 @@ function Ready({
   };
 
   useEffect(() => {
-    // On ping, the bubble expands into the conversation (Phase 02).
+    // On ping, the floating conversation opens and Phillip's messages pop in
+    // over the vignette — the messages themselves are the proactive nudge.
+    // (setOpen / refs are stable, so this effect only depends on `tracker`.)
     tracker.callbacks.onPing = (reason) => {
       openTriggerRef.current = reason;
       setOpen(true);
@@ -201,27 +211,37 @@ function Ready({
   let footer: ReactNode;
   if (flow === "iteration") {
     footer = (
-      <IterationPanel
-        busy={iteration.busy}
-        onSubmit={onIterationSubmit}
-        onCancel={() => setFlow("chat")}
-      />
+      <div className="stage-card">
+        <IterationPanel
+          busy={iteration.busy}
+          onSubmit={onIterationSubmit}
+          onCancel={() => setFlow("chat")}
+        />
+      </div>
     );
   } else if (flow === "escalation") {
     footer = (
-      <EscalationPanel busy={escalating} onSubmit={onEscalate} onCancel={() => setFlow("chat")} />
+      <div className="stage-card">
+        <EscalationPanel busy={escalating} onSubmit={onEscalate} onCancel={() => setFlow("chat")} />
+      </div>
     );
   } else if (flow === "checkout") {
     footer = (
-      <CheckoutPanel
-        offer={config.offer}
-        busy={checkingOut}
-        onPay={onPay}
-        onCancel={() => setFlow("chat")}
-      />
+      <div className="stage-card">
+        <CheckoutPanel
+          offer={config.offer}
+          busy={checkingOut}
+          onPay={onPay}
+          onCancel={() => setFlow("chat")}
+        />
+      </div>
     );
   } else if (flow === "setup") {
-    footer = <SetupPanel onComplete={onGoLive} />;
+    footer = (
+      <div className="stage-card">
+        <SetupPanel onComplete={onGoLive} />
+      </div>
+    );
   } else {
     footer = (
       <>
@@ -237,13 +257,40 @@ function Ready({
 
   return (
     <PhillipProvider value={value}>
-      {open ? (
-        <Panel persona={config.persona} onClose={() => setOpen(false)} footer={footer}>
-          <Conversation messages={convo.messages} streaming={convo.streaming} />
-        </Panel>
-      ) : (
-        <Bubble persona={config.persona} pulse onClick={() => setOpen(true)} />
-      )}
+      {/* `strict` forbids accidental full-`motion.*` use; `domAnimation` is the
+          lean feature set (enter/exit, gestures, variants, reduced-motion) we
+          bundle into the drop-in. reducedMotion="user" honors the OS setting. */}
+      <LazyMotion features={domAnimation} strict>
+        <MotionConfig reducedMotion="user">
+          {/* The vignette darkens the corner whenever the conversation is open,
+              so the frameless bubbles always have a backdrop to read against. */}
+          <AnimatePresence>{open ? <Vignette key="vignette" /> : null}</AnimatePresence>
+          {/* Frameless transcript floating over the vignette ⇄ resting bubble,
+              in independent presences so each can play its own exit. */}
+          <AnimatePresence>
+            {open ? (
+              <Stage
+                key="stage"
+                persona={config.persona}
+                onClose={() => setOpen(false)}
+                footer={footer}
+              >
+                <Conversation messages={convo.messages} streaming={convo.streaming} />
+              </Stage>
+            ) : null}
+          </AnimatePresence>
+          <AnimatePresence>
+            {open ? null : (
+              <Bubble
+                key="bubble"
+                persona={config.persona}
+                pulse={false}
+                onClick={() => openConversation("manual")}
+              />
+            )}
+          </AnimatePresence>
+        </MotionConfig>
+      </LazyMotion>
     </PhillipProvider>
   );
 }
