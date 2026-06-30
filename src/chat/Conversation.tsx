@@ -1,8 +1,19 @@
+import { AnimatePresence, m } from "motion/react";
 import { useEffect, useRef } from "react";
 import { usePhillip } from "../core/PhillipProvider";
 import type { Message as Msg } from "../intent/types";
+import { staggerChildren } from "../overlay/motion";
 import { Message } from "./Message";
 import { TypingIndicator } from "./TypingIndicator";
+
+// Parent only orchestrates timing; it has no visual change of its own. Children
+// (Message) inherit the "initial"/"animate" variant labels and resolve them
+// from their own variants, so the whole list staggers in together on open and
+// each newly-appended message rises in on arrival.
+const listOrchestration = {
+  initial: {},
+  animate: { transition: { staggerChildren } },
+};
 
 // The scrollable message list. Typing shows while we're awaiting Phillip's first
 // token; once it streams in, the growing message replaces it. Persona comes from
@@ -21,12 +32,14 @@ export function Conversation({ messages, streaming }: { messages: Msg[]; streami
   }, [messages, showTyping]);
 
   return (
-    <>
-      {messages.map((m) => (
-        <Message key={m.id} message={m} persona={persona} />
-      ))}
+    <m.div className="convo" variants={listOrchestration} initial="initial" animate="animate">
+      <AnimatePresence initial={false}>
+        {messages.map((msg) => (
+          <Message key={msg.id} message={msg} persona={persona} />
+        ))}
+      </AnimatePresence>
       {showTyping ? <TypingIndicator persona={persona} /> : null}
       <div ref={endRef} />
-    </>
+    </m.div>
   );
 }

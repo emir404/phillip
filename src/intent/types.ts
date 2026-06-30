@@ -24,6 +24,12 @@ export interface Message {
   streaming?: boolean;
   /** True when the reply failed and a retry affordance should show. */
   error?: boolean;
+  /**
+   * Optional iMessage-style tap-back reaction (e.g. "❤️", "👍"). Purely visual
+   * for now — nothing populates it yet; the bubble renders the badge slot when
+   * present so the feature is ready to wire to the backend later.
+   */
+  reaction?: string;
 }
 
 export interface Conversation {

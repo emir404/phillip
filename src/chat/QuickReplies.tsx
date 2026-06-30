@@ -1,4 +1,6 @@
+import { m } from "motion/react";
 import type { QuickReply } from "../intent/types";
+import { press, tapTransition } from "../overlay/motion";
 
 // Three doors at the reaction step — and any guided options the agent proposes
 // mid-conversation. Typing is always open too (the composer).
@@ -15,15 +17,17 @@ export function QuickReplies({
   return (
     <div className="quick-replies">
       {replies.map((qr) => (
-        <button
+        <m.button
           type="button"
           key={qr.id}
           className="qr"
           disabled={disabled}
           onClick={() => onPick(qr)}
+          whileTap={press}
+          transition={tapTransition}
         >
           {qr.label}
-        </button>
+        </m.button>
       ))}
     </div>
   );

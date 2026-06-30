@@ -1,3 +1,4 @@
+import { AnimatePresence, LazyMotion, MotionConfig, domAnimation } from "motion/react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Tracker } from "./analytics/tracker";
 import { Bubble } from "./chat/Bubble";
@@ -20,6 +21,10 @@ import {
   useIteration,
 } from "./iteration";
 import { log } from "./lib/log";
+import { NotificationStack } from "./overlay/NotificationStack";
+import { Vignette } from "./overlay/Vignette";
+import { composePreview, previewTitle } from "./overlay/preview";
+import { useNotifications } from "./overlay/useNotifications";
 import {
   CheckoutPanel,
   EscalationPanel,
@@ -81,6 +86,15 @@ function Ready({
   const [checkingOut, setCheckingOut] = useState(false);
   const openTriggerRef = useRef<PingReason | "manual">("manual");
   const openedRef = useRef(false);
+  const notifications = useNotifications();
+
+  // Opening the conversation — from a notification click or the resting bubble.
+  // Clears any live notification + vignette so they don't sit behind the panel.
+  const openConversation = (trigger: PingReason | "manual") => {
+    openTriggerRef.current = trigger;
+    notifications.clear();
+    setOpen(true);
+  };
 
   // Phase 03: route the classified intent through the funnel.
   const onIntent = (intent: Intent, sentiment?: Sentiment) => {
@@ -177,14 +191,19 @@ function Ready({
   };
 
   useEffect(() => {
-    // On ping, the bubble expands into the conversation (Phase 02).
+    // On ping, surface a notification over the vignette rather than forcing the
+    // panel open — the lead chooses to engage by clicking it (or the bubble).
     tracker.callbacks.onPing = (reason) => {
       openTriggerRef.current = reason;
-      setOpen(true);
+      notifications.push(
+        reason,
+        previewTitle(config.persona),
+        composePreview(reason, config.persona),
+      );
     };
     tracker.start();
     return () => tracker.stop();
-  }, [tracker]);
+  }, [tracker, notifications.push, config.persona]);
 
   useEffect(() => {
     if (!open || openedRef.current) return;
@@ -237,13 +256,52 @@ function Ready({
 
   return (
     <PhillipProvider value={value}>
-      {open ? (
-        <Panel persona={config.persona} onClose={() => setOpen(false)} footer={footer}>
-          <Conversation messages={convo.messages} streaming={convo.streaming} />
-        </Panel>
-      ) : (
-        <Bubble persona={config.persona} pulse onClick={() => setOpen(true)} />
-      )}
+      {/* `strict` forbids accidental full-`motion.*` use; `domAnimation` is the
+          lean feature set (enter/exit, gestures, variants, reduced-motion) we
+          bundle into the drop-in. reducedMotion="user" honors the OS setting. */}
+      <LazyMotion features={domAnimation} strict>
+        <MotionConfig reducedMotion="user">
+          {/* The vignette + notifications only exist while a ping is live and
+              the panel is closed; they frame and surface the proactive nudge. */}
+          <AnimatePresence>
+            {!open && notifications.notifications.length > 0 ? <Vignette key="vignette" /> : null}
+          </AnimatePresence>
+          {!open ? (
+            <NotificationStack
+              notifications={notifications.notifications}
+              persona={config.persona}
+              onOpen={() => openConversation(openTriggerRef.current)}
+              onDismiss={notifications.dismiss}
+              onPause={notifications.pause}
+              onResume={notifications.resume}
+            />
+          ) : null}
+          {/* Two independent presences so the panel can play its exit while the
+              bubble fades back in — both are fixed to the same corner. */}
+          <AnimatePresence>
+            {open ? (
+              <Panel
+                key="panel"
+                persona={config.persona}
+                onClose={() => setOpen(false)}
+                footer={footer}
+              >
+                <Conversation messages={convo.messages} streaming={convo.streaming} />
+              </Panel>
+            ) : null}
+          </AnimatePresence>
+          <AnimatePresence>
+            {open ? null : (
+              <Bubble
+                key="bubble"
+                persona={config.persona}
+                pulse={notifications.notifications.length > 0}
+                onClick={() => openConversation("manual")}
+              />
+            )}
+          </AnimatePresence>
+        </MotionConfig>
+      </LazyMotion>
     </PhillipProvider>
   );
 }

@@ -1,4 +1,7 @@
+import { m } from "motion/react";
 import { type FormEvent, useState } from "react";
+import { press, tapTransition } from "../overlay/motion";
+import { SendArrow } from "../ui/icons";
 
 export function Composer({
   disabled,
@@ -26,9 +29,15 @@ export function Composer({
         aria-label="message"
         autoComplete="off"
       />
-      <button type="submit" disabled={disabled || text.trim().length === 0} aria-label="send">
-        ↑
-      </button>
+      <m.button
+        type="submit"
+        disabled={disabled || text.trim().length === 0}
+        aria-label="send"
+        whileTap={press}
+        transition={tapTransition}
+      >
+        <SendArrow size={18} />
+      </m.button>
     </form>
   );
 }

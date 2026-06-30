@@ -25,7 +25,13 @@ export function CheckoutPanel({
           not yet
         </button>
         <button type="button" className="iter-submit" onClick={onPay} disabled={busy}>
-          {busy ? "opening…" : `make it live · ${formatPrice(offer)}`}
+          {busy ? (
+            "opening…"
+          ) : (
+            <>
+              make it live · <span className="tnum">{formatPrice(offer)}</span>
+            </>
+          )}
         </button>
       </div>
       <div className="iter-note">
