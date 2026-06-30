@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Phillip · drop-in example</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 720px; margin: 80px auto; padding: 0 24px; color: #18181b; }
+      code { background: #f4f4f5; padding: 2px 6px; border-radius: 6px; }
+    </style>
+  </head>
+  <body>
+    <h1>Some auto-generated site</h1>
+    <p>
+      This page stands in for a generated preview. The single tag below is the
+      entire install — it boots from <code>data-preview-id</code> and pulls
+      everything else (persona, offer, state) from the backend at
+      <code>data-api-base</code>.
+    </p>
+    <p>
+      Run <code>pnpm build</code> first to produce <code>dist/preview.global.js</code>.
+      For a fully live local demo (with the mock backend) use <code>pnpm dev</code>
+      instead — this static page needs a real backend at <code>data-api-base</code>
+      to render the widget.
+    </p>
+
+    <!-- One tag. React is bundled in; the widget auto-mounts into a shadow root. -->
+    <script
+      src="../dist/preview.global.js"
+      data-preview-id="prv_demo"
+      data-api-base="https://api.nutz.inc"
+      data-debug
+      defer
+    ></script>
+  </body>
+</html>

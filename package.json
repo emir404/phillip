@@ -1,0 +1,80 @@
+{
+  "name": "@nutz/phillip",
+  "version": "0.1.0",
+  "description": "The autonomous preview-to-paid embed. Drops Phillip onto any auto-generated website preview: tracks behavior, opens a chat, iterates, and closes — all backend-driven from a single previewId.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "private": false,
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "unpkg": "./dist/preview.global.js",
+  "jsdelivr": "./dist/preview.global.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./preview.js": "./dist/preview.global.js",
+    "./package.json": "./package.json"
+  },
+  "files": ["dist"],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "size": "size-limit",
+    "prepublishOnly": "pnpm run build"
+  },
+  "peerDependencies": {
+    "react": ">=18.2",
+    "react-dom": ">=18.2"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@size-limit/preset-small-lib": "^11.1.6",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "happy-dom": "^15.11.7",
+    "jsdom": "^29.1.1",
+    "msw": "^2.7.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "size-limit": "^11.1.6",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  },
+  "msw": {
+    "workerDirectory": ["playground/public"]
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@biomejs/biome", "esbuild", "msw"]
+  },
+  "size-limit": [
+    {
+      "name": "drop-in IIFE (react bundled)",
+      "path": "dist/preview.global.js",
+      "limit": "95 kB"
+    },
+    {
+      "name": "react entry (esm)",
+      "path": "dist/index.js",
+      "limit": "30 kB"
+    }
+  ]
+}
