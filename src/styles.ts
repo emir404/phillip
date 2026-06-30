@@ -35,20 +35,24 @@ export const styles = `
   --p-soft: #f4f4f5;
   --p-pop: #ff4d8d;
 
-  /* iMessage-shaped bubbles, monochrome brand (not iMessage blue). */
-  --p-them-bg: #e9e9eb;
-  --p-them-fg: #1c1c1e;
-  --p-bubble-radius: 19px;
+  /* iMessage-shaped bubbles, monochrome brand (not iMessage blue). Values
+     mirror the imessage-simulator: received #e9e9ea, ~18px radius. */
+  --p-them-bg: #e9e9ea;
+  --p-them-fg: #000000;
+  --p-bubble-radius: 18px;
 
-  /* Frosted surfaces (composer, chips, sub-flow cards). */
-  --p-glass: rgba(255,255,255,.7);
+  /* Frosted surfaces (composer, chips, sub-flow cards) — matches the repo's
+     --ios-glass and its soft pill shadow. */
+  --p-glass: rgba(247,247,247,.92);
   --p-glass-blur: 22px;
-  --p-glass-ring: inset 0 0 0 1px rgba(255,255,255,.55);
+  --p-glass-ring: inset 0 0 0 1px rgba(255,255,255,.5);
+  --p-glass-shadow: 0 0 0 .5px rgba(0,0,0,.04), 0 2px 6px -1px rgba(0,0,0,.06);
 
   /* Soft lift so bubbles + glass read over the dimmed vignette. */
   --p-shadow: 0 1px 2px rgba(0,0,0,.06), 0 8px 24px -8px rgba(0,0,0,.22), 0 24px 48px -16px rgba(0,0,0,.28);
   --p-shadow-sm: 0 1px 2px rgba(0,0,0,.1), 0 6px 16px -8px rgba(0,0,0,.28);
-  --p-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  /* SF / system stack to match the repo (San Francisco on Apple devices). */
+  --p-font: system-ui, -apple-system, "SF Pro Text", "SF Pro Display", "Segoe UI", sans-serif;
 
   /* Stacking order, all within the single max z-index host. */
   --p-z-vignette: 1;
@@ -56,6 +60,7 @@ export const styles = `
   --p-z-stage: 30;
 
   font-family: var(--p-font);
+  font-variation-settings: 'wdth' 100;
   color: var(--p-fg);
   font-size: 14px;
   line-height: 1.5;
@@ -69,13 +74,15 @@ export const styles = `
 .tnum { font-variant-numeric: tabular-nums; }
 
 /* --- vignette --- */
+/* Much stronger now: a deep, focused darkening anchored to the bottom-right
+   that fades to clear by ~mid-screen so the rest of the page stays visible. */
 .vignette {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: var(--p-z-vignette);
-  background: radial-gradient(125% 125% at 100% 100%,
-    rgba(12,12,18,.34) 0%, rgba(12,12,18,.16) 30%, rgba(12,12,18,0) 62%);
+  background: radial-gradient(140% 140% at 100% 100%,
+    rgba(5,5,9,.82) 0%, rgba(5,5,9,.6) 18%, rgba(7,7,11,.34) 38%, rgba(8,8,12,.1) 52%, rgba(8,8,12,0) 64%);
 }
 
 /* --- resting bubble (closed) --- */
@@ -145,10 +152,11 @@ export const styles = `
   min-height: 0;
   overflow-y: auto;
   scroll-behavior: smooth;
-  padding-top: 28px;
-  /* Older messages dissolve into the page at the top instead of a hard cut. */
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 60px);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 60px);
+  padding-top: 32px;
+  /* Older messages dissolve into the page at the top — a long fade over the
+     top quarter, matching the repo's transcript mask. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 24%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 24%);
 }
 .stage-footer { pointer-events: auto; margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
 
@@ -162,21 +170,28 @@ export const styles = `
 .msg-bubble-wrap { position: relative; max-width: 82%; }
 .msg-bubble {
   position: relative;
-  padding: 7px 13px;
+  padding: 8px 13px;
   border-radius: var(--p-bubble-radius);
-  font-size: 14px;
-  line-height: 1.4;
+  font-size: 16px;
+  line-height: 1.32;
+  letter-spacing: -.01em;
   white-space: pre-wrap;
   word-wrap: break-word;
   text-wrap: pretty;
   box-shadow: 0 1px 2px rgba(0,0,0,.12), 0 6px 16px -8px rgba(0,0,0,.3);
 }
 .msg.phillip .msg-bubble { background: var(--p-them-bg); color: var(--p-them-fg); }
-.msg.lead .msg-bubble { background: var(--p-accent); color: var(--p-accent-fg); }
+/* The sent bubble stays brand-black; a faint light edge keeps its silhouette
+   readable where it sits on the darkest part of the vignette. */
+.msg.lead .msg-bubble {
+  background: var(--p-accent); color: var(--p-accent-fg);
+  box-shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 16px -8px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.08);
+}
 
 /* Self-contained SVG tail (only on the last bubble of a run). currentColor is
-   set to the bubble color; them is mirrored to hook on the left. */
-.msg-tail { position: absolute; bottom: 0; width: 16px; height: 17px; }
+   set to the bubble color; them is mirrored to hook on the left. The repo
+   lifts the tail slightly off the bottom (~1.73cqw). */
+.msg-tail { position: absolute; bottom: 5px; width: 16px; height: 17px; }
 .msg.phillip .msg-tail { left: -4px; transform: scaleX(-1); color: var(--p-them-bg); }
 .msg.lead .msg-tail { right: -4px; color: var(--p-accent); }
 
@@ -186,20 +201,6 @@ export const styles = `
 }
 .msg-bubble.error { background: #fee2e2; color: #b91c1c; }
 .msg.error .msg-tail, .msg .msg-bubble.error + .msg-tail { color: #fee2e2; }
-
-/* Reaction badge — visual slot, ready to populate later. */
-.msg-reaction {
-  position: absolute;
-  top: -12px;
-  font-size: 13px;
-  line-height: 1;
-  padding: 3px 5px;
-  background: var(--p-bg);
-  border-radius: 999px;
-  box-shadow: var(--p-shadow-sm);
-}
-.msg.phillip .msg-reaction { right: -6px; }
-.msg.lead .msg-reaction { left: -6px; }
 
 /* --- typing --- */
 .typing {

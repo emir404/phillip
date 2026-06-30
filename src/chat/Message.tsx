@@ -26,7 +26,6 @@ export function Message({ message, tail }: { message: Msg; tail: boolean }) {
       <div className="msg-bubble-wrap">
         <div className={message.error ? "msg-bubble error" : "msg-bubble"}>{message.text}</div>
         {tail ? <BubbleTail className="msg-tail" /> : null}
-        {message.reaction ? <span className="msg-reaction">{message.reaction}</span> : null}
       </div>
     </m.div>
   );
