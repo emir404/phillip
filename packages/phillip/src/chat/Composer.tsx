@@ -1,6 +1,6 @@
-import { m } from "motion/react";
+import { m, useReducedMotion } from "motion/react";
 import { type FormEvent, useState } from "react";
-import { press, tapTransition } from "../overlay/motion";
+import { containerVariants, itemVariants, press, tapTransition } from "../overlay/motion";
 import { SendArrow } from "../ui/icons";
 
 export function Composer({
@@ -10,6 +10,7 @@ export function Composer({
   disabled?: boolean;
   onSend: (text: string) => void;
 }) {
+  const reduce = useReducedMotion() ?? false;
   const [text, setText] = useState("");
 
   const submit = (e: FormEvent) => {
@@ -21,8 +22,16 @@ export function Composer({
   };
 
   return (
-    <form className="composer" onSubmit={submit}>
-      <input
+    <m.form
+      className="composer"
+      onSubmit={submit}
+      variants={containerVariants(reduce)}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
+      <m.input
+        variants={itemVariants(reduce)}
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder="type a message…"
@@ -31,6 +40,7 @@ export function Composer({
       />
       <m.button
         type="submit"
+        variants={itemVariants(reduce)}
         disabled={disabled || text.trim().length === 0}
         aria-label="send"
         whileTap={press}
@@ -38,6 +48,6 @@ export function Composer({
       >
         <SendArrow size={18} />
       </m.button>
-    </form>
+    </m.form>
   );
 }

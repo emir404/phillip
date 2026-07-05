@@ -274,6 +274,7 @@ function Ready({
                 persona={config.persona}
                 onClose={() => setOpen(false)}
                 footer={footer}
+                footerKey={flow}
               >
                 <Conversation messages={convo.messages} streaming={convo.streaming} />
               </Stage>

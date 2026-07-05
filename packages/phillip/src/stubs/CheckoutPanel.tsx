@@ -1,3 +1,5 @@
+import { m, useReducedMotion } from "motion/react";
+import { containerVariants, itemVariants } from "../overlay/motion";
 import type { Offer } from "../types/boot";
 import { formatPrice } from "./payment";
 
@@ -12,15 +14,26 @@ export function CheckoutPanel({
   onPay: () => void;
   onCancel: () => void;
 }) {
+  const reduce = useReducedMotion() ?? false;
   return (
-    <div className="iteration">
-      <div className="iter-label">here's what's included</div>
-      <ul className="checkout-includes">
+    <m.div
+      className="iteration"
+      variants={containerVariants(reduce)}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
+      <m.div className="iter-label" variants={itemVariants(reduce)}>
+        here's what's included
+      </m.div>
+      <m.ul className="checkout-includes" variants={containerVariants(reduce)}>
         {offer.includes.map((x) => (
-          <li key={x}>{x}</li>
+          <m.li key={x} variants={itemVariants(reduce)}>
+            {x}
+          </m.li>
         ))}
-      </ul>
-      <div className="iter-actions">
+      </m.ul>
+      <m.div className="iter-actions" variants={itemVariants(reduce)}>
         <button type="button" className="qr" onClick={onCancel} disabled={busy}>
           not yet
         </button>
@@ -33,10 +46,10 @@ export function CheckoutPanel({
             </>
           )}
         </button>
-      </div>
-      <div className="iter-note">
+      </m.div>
+      <m.div className="iter-note" variants={itemVariants(reduce)}>
         stripe checkout is stubbed in v0 — this simulates a successful payment.
-      </div>
-    </div>
+      </m.div>
+    </m.div>
   );
 }

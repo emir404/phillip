@@ -30,6 +30,47 @@ export const tapTransition: Transition = { duration: 0.12 };
 // settles in well under ~350ms and reads crisp rather than slow.
 export const staggerChildren = 0.05;
 
+// --- generic container / item -----------------------------------------------
+// The shared "seamless" recipe applied across every surface: children enter
+// with blur + opacity + position and cascade via the parent's stagger. Anything
+// that used to just pop in gets this so the whole widget breathes as one.
+
+export function containerVariants(reduce: boolean, stagger = staggerChildren): Variants {
+  return {
+    initial: {},
+    animate: {
+      transition: {
+        staggerChildren: reduce ? 0 : stagger,
+        delayChildren: reduce ? 0 : 0.03,
+      },
+    },
+    exit: {
+      transition: {
+        staggerChildren: reduce ? 0 : stagger * 0.6,
+        staggerDirection: -1,
+      },
+    },
+  };
+}
+
+// A single element inside a container. Enter combines blur + opacity + a short
+// upward travel; exit is faster and drops the blur. Reduced motion collapses to
+// an opacity-only cross-fade with no movement or defocus.
+export function itemVariants(reduce: boolean): Variants {
+  if (reduce) {
+    return {
+      initial: { opacity: 0 },
+      animate: { opacity: 1, transition: { duration: 0.12 } },
+      exit: { opacity: 0, transition: { duration: 0.12 } },
+    };
+  }
+  return {
+    initial: { opacity: 0, y: 10, scale: 0.98, filter: "blur(6px)" },
+    animate: { opacity: 1, y: 0, scale: 1, filter: "blur(0px)", transition: spring.gentle },
+    exit: { opacity: 0, y: 6, filter: "blur(3px)", transition: exitTween },
+  };
+}
+
 // --- variant factories ------------------------------------------------------
 
 export function panelVariants(reduce: boolean): Variants {

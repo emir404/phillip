@@ -1,4 +1,6 @@
+import { m, useReducedMotion } from "motion/react";
 import { type FormEvent, useState } from "react";
+import { containerVariants, itemVariants, press } from "../overlay/motion";
 import { isValidEmail } from "./escalation";
 
 export function EscalationPanel({
@@ -10,6 +12,7 @@ export function EscalationPanel({
   onSubmit: (email: string) => void;
   onCancel: () => void;
 }) {
+  const reduce = useReducedMotion() ?? false;
   const [email, setEmail] = useState("");
   const valid = isValidEmail(email);
 
@@ -19,11 +22,18 @@ export function EscalationPanel({
   };
 
   return (
-    <form className="iteration" onSubmit={submit}>
-      <div className="iter-label">
+    <m.form
+      className="iteration"
+      onSubmit={submit}
+      variants={containerVariants(reduce)}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
+      <m.div className="iter-label" variants={itemVariants(reduce)}>
         drop your email and a colleague picks it up — usually within the hour
-      </div>
-      <div className="composer bare">
+      </m.div>
+      <m.div className="composer bare" variants={itemVariants(reduce)}>
         <input
           type="email"
           value={email}
@@ -32,15 +42,20 @@ export function EscalationPanel({
           aria-label="email"
           autoComplete="email"
         />
-        <button type="submit" disabled={!valid || busy} aria-label="send email">
+        <m.button
+          type="submit"
+          disabled={!valid || busy}
+          aria-label="send email"
+          whileTap={press}
+        >
           ↑
-        </button>
-      </div>
-      <div className="iter-actions">
+        </m.button>
+      </m.div>
+      <m.div className="iter-actions" variants={itemVariants(reduce)}>
         <button type="button" className="qr" onClick={onCancel} disabled={busy}>
           back
         </button>
-      </div>
-    </form>
+      </m.div>
+    </m.form>
   );
 }
