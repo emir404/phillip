@@ -74,21 +74,28 @@ export const styles = `
 .tnum { font-variant-numeric: tabular-nums; }
 
 /* --- vignette (frosted corner backdrop) --- */
-/* Blurs AND gently dims the page behind the conversation, feathered to the
-   bottom-right corner with a radial mask. The page goes softly out of focus
-   rather than turning muddy/brown — a clean, premium spotlight. */
+/* Blurs AND dims the page behind the conversation, feathered to the bottom-
+   right corner. A dense radial core (anchored at 100% 100%) falls off smoothly
+   over a faint global tint, so the corner reads deep and premium while the rest
+   of the page just softly recedes — the page goes out of focus, never muddy. */
 .vignette {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: var(--p-z-vignette);
-  background: rgba(8,8,12,.22);
-  backdrop-filter: blur(18px) saturate(1.05);
-  -webkit-backdrop-filter: blur(18px) saturate(1.05);
-  -webkit-mask-image: radial-gradient(120% 120% at 100% 100%,
-    #000 0%, #000 28%, rgba(0,0,0,.55) 44%, transparent 58%);
-  mask-image: radial-gradient(120% 120% at 100% 100%,
-    #000 0%, #000 28%, rgba(0,0,0,.55) 44%, transparent 58%);
+  background:
+    radial-gradient(92% 92% at 100% 100%,
+      rgba(6,6,10,.64) 0%,
+      rgba(6,6,10,.46) 24%,
+      rgba(6,6,10,.22) 46%,
+      transparent 66%),
+    rgba(8,8,12,.16);
+  backdrop-filter: blur(20px) saturate(1.08);
+  -webkit-backdrop-filter: blur(20px) saturate(1.08);
+  -webkit-mask-image: radial-gradient(145% 145% at 100% 100%,
+    #000 0%, #000 40%, rgba(0,0,0,.62) 56%, transparent 74%);
+  mask-image: radial-gradient(145% 145% at 100% 100%,
+    #000 0%, #000 40%, rgba(0,0,0,.62) 56%, transparent 74%);
 }
 
 /* --- resting bubble (closed) --- */
@@ -119,6 +126,74 @@ export const styles = `
   border: 2px solid #fff;
   border-radius: 50%;
   box-shadow: 0 1px 3px rgba(0,0,0,.25);
+}
+/* Always-on "online" presence — a live person, not a dormant chat icon. */
+.bubble-status {
+  position: absolute;
+  right: 2px; bottom: 2px;
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: #22c55e;
+  border: 2.5px solid #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,.3);
+}
+
+/* --- shared avatar photo --- */
+.avatar {
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
+}
+.avatar.sm { width: 40px; height: 40px; }
+.avatar.xs { width: 30px; height: 30px; }
+
+/* --- resting peek (the speech bubble off Phillip's face) --- */
+.nudge {
+  position: fixed;
+  right: 92px;
+  bottom: 22px;
+  z-index: var(--p-z-bubble);
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: min(300px, calc(100vw - 116px));
+  transform-origin: bottom right;
+  will-change: transform, opacity, filter;
+  pointer-events: none;
+}
+.nudge-card {
+  pointer-events: auto;
+  display: flex; align-items: center; gap: 10px;
+  text-align: left;
+  border: none; cursor: pointer; font-family: inherit;
+  padding: 9px 13px 9px 10px;
+  border-radius: 18px;
+  background: var(--p-glass);
+  backdrop-filter: blur(var(--p-glass-blur)) saturate(1.6);
+  -webkit-backdrop-filter: blur(var(--p-glass-blur)) saturate(1.6);
+  box-shadow: var(--p-shadow), var(--p-glass-ring);
+}
+.nudge-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nudge-head { display: flex; align-items: center; gap: 7px; }
+.nudge-name { font-weight: 650; font-size: 13px; color: var(--p-fg); }
+.nudge-live { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #16a34a; font-weight: 600; }
+.nudge-live-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.18);
+}
+.nudge-msg { font-size: 13px; line-height: 1.35; color: var(--p-fg); text-wrap: pretty; }
+.nudge-dismiss {
+  pointer-events: auto; flex: none;
+  width: 22px; height: 22px; margin-top: 3px;
+  border: none; cursor: pointer;
+  border-radius: 50%;
+  color: var(--p-muted);
+  background: var(--p-glass);
+  backdrop-filter: blur(var(--p-glass-blur)) saturate(1.6);
+  -webkit-backdrop-filter: blur(var(--p-glass-blur)) saturate(1.6);
+  box-shadow: var(--p-shadow-sm), var(--p-glass-ring);
+  display: grid; place-items: center;
 }
 
 /* --- frameless stage (open) --- */

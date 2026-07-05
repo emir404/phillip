@@ -28,6 +28,9 @@ export function Bubble({
       whileTap={press}
     >
       <img src={persona.avatarUrl} alt={persona.name} />
+      {/* Always-on "online" dot: signals a live person is available, not a
+          dormant chatbot icon. */}
+      <span className="bubble-status" aria-hidden="true" />
       {pulse ? <span className="bubble-badge" /> : null}
     </m.button>
   );

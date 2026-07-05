@@ -4,6 +4,7 @@ import { Tracker } from "./analytics/tracker";
 import { Bubble } from "./chat/Bubble";
 import { Composer } from "./chat/Composer";
 import { Conversation } from "./chat/Conversation";
+import { Nudge } from "./chat/Nudge";
 import { QuickReplies } from "./chat/QuickReplies";
 import { Stage } from "./chat/Stage";
 import { type ControlEvent, useConversation } from "./chat/useConversation";
@@ -81,8 +82,16 @@ function Ready({
   const [flow, setFlow] = useState<Flow>("chat");
   const [escalating, setEscalating] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
+  // The resting peek beside the bubble — held back for a beat on landing so the
+  // lead sees the site first, then dismissible for the rest of the session.
+  const [nudgeShown, setNudgeShown] = useState(false);
+  const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const openTriggerRef = useRef<PingReason | "manual">("manual");
   const openedRef = useRef(false);
+
+  // A specific, human peek — names the person and their business, not "chat
+  // with us". Lowercase, low-pressure, matches Phillip's voice.
+  const peek = `hey, i'm ${config.persona.name.toLowerCase()} 👋 i built this one for ${config.lead.business} — got a sec?`;
 
   // Opening the floating conversation — from a ping or the resting bubble.
   const openConversation = (trigger: PingReason | "manual") => {
@@ -203,6 +212,12 @@ function Ready({
     funnel.to("engaged", "conversation_opened");
   }, [open, tracker, funnel]);
 
+  // Let the site land first, then bring Phillip's peek in.
+  useEffect(() => {
+    const t = setTimeout(() => setNudgeShown(true), 1600);
+    return () => clearTimeout(t);
+  }, []);
+
   const value = useMemo(
     () => ({ runtime, client, config, tracker }),
     [runtime, client, config, tracker],
@@ -281,11 +296,22 @@ function Ready({
             ) : null}
           </AnimatePresence>
           <AnimatePresence>
+            {open || nudgeDismissed || !nudgeShown ? null : (
+              <Nudge
+                key="nudge"
+                persona={config.persona}
+                message={peek}
+                onOpen={() => openConversation("manual")}
+                onDismiss={() => setNudgeDismissed(true)}
+              />
+            )}
+          </AnimatePresence>
+          <AnimatePresence>
             {open ? null : (
               <Bubble
                 key="bubble"
                 persona={config.persona}
-                pulse={false}
+                pulse={nudgeShown && !nudgeDismissed}
                 onClick={() => openConversation("manual")}
               />
             )}

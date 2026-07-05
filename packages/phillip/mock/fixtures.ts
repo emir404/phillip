@@ -8,16 +8,10 @@ import type { BootConfig } from "../src/types/boot";
 
 export const DEMO_PREVIEW_ID = "prv_demo";
 
-function phillipAvatar(): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
-<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-<stop offset="0" stop-color="#ff8a5b"/><stop offset="1" stop-color="#ff4d8d"/>
-</linearGradient></defs>
-<rect width="96" height="96" rx="48" fill="url(#g)"/>
-<text x="50%" y="55%" text-anchor="middle" dominant-baseline="middle" font-family="Inter,system-ui,sans-serif" font-size="44" font-weight="700" fill="#fff">P</text>
-</svg>`;
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
-}
+// Temporary profile picture for the demo. In production the backend serves
+// Phillip's real photo via `persona.avatarUrl`; here the playground serves this
+// placeholder headshot from /public so the widget feels like a real person.
+const PHILLIP_AVATAR = "/phillip.jpg";
 
 function resumedConversation(sessionId: string): Conversation {
   return {
@@ -51,7 +45,7 @@ export function makeBootConfig(previewId: string, opts?: { returning?: boolean }
     persona: {
       name: "Phillip",
       title: "founder · nutz",
-      avatarUrl: phillipAvatar(),
+      avatarUrl: PHILLIP_AVATAR,
     },
     offer: {
       productId: "prod_site",
