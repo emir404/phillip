@@ -9,5 +9,7 @@ export function Avatar({
   size = "sm",
   ...rest
 }: { persona: Persona; size?: "sm" | "xs" } & HTMLMotionProps<"img">) {
-  return <m.img className={`avatar ${size}`} src={persona.avatarUrl} alt={persona.name} {...rest} />;
+  return (
+    <m.img className={`avatar ${size}`} src={persona.avatarUrl} alt={persona.name} {...rest} />
+  );
 }

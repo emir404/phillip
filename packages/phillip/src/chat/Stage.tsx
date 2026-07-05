@@ -1,6 +1,12 @@
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import type { ReactNode } from "react";
-import { containerVariants, itemVariants, panelVariants, press, tapTransition } from "../overlay/motion";
+import {
+  containerVariants,
+  itemVariants,
+  panelVariants,
+  press,
+  tapTransition,
+} from "../overlay/motion";
 import type { Persona } from "../types/boot";
 import { Close } from "../ui/icons";
 

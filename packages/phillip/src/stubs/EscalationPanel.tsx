@@ -42,12 +42,7 @@ export function EscalationPanel({
           aria-label="email"
           autoComplete="email"
         />
-        <m.button
-          type="submit"
-          disabled={!valid || busy}
-          aria-label="send email"
-          whileTap={press}
-        >
+        <m.button type="submit" disabled={!valid || busy} aria-label="send email" whileTap={press}>
           ↑
         </m.button>
       </m.div>
