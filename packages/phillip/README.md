@@ -1,0 +1,138 @@
+# @nutz/phillip
+
+**The autonomous preview-to-paid embed.**
+
+nutz scouts a business, auto-builds them a website, and sends a link. **Phillip**
+is the layer that turns that cold preview into a paying customer with no human in
+the loop: he watches how the lead behaves, opens a chat in the bottom-right
+wearing our salesperson's face, handles feedback, iterates on the site, takes
+payment, and runs setup.
+
+This package is *the embed* — a deliberately dumb client widget the Build agent
+drops into every preview. It boots with a single `previewId` and pulls everything
+else (persona, offer, state, Stripe keys) from the backend at runtime, so secrets
+never touch the page and the offer/script/persona can change without redeploying
+any site.
+
+> The loop: **Land → Engage → React → Iterate or escalate → Pay → Set up**
+
+---
+
+## Install
+
+```bash
+npm i @nutz/phillip   # or pnpm / yarn
+```
+
+`react` and `react-dom` (>=18.2) are peer dependencies.
+
+### React
+
+```tsx
+import { Phillip } from "@nutz/phillip";
+
+export default function Page() {
+  return (
+    <>
+      <GeneratedSite />
+      <Phillip previewId="prv_8f2a" />
+    </>
+  );
+}
+```
+
+`<PreviewAgent>` is exported as a back-compat alias for `<Phillip>`.
+
+### Drop-in (non-React)
+
+The same thing as a single tag — React is bundled into this build:
+
+```html
+<script
+  src="https://cdn.jsdelivr.net/npm/@nutz/phillip/preview.js"
+  data-preview-id="prv_8f2a"
+  defer
+></script>
+```
+
+Optional attributes: `data-api-base` (backend origin; defaults to same-origin),
+`data-debug` (verbose console logging).
+
+---
+
+## How it works
+
+The embed renders into a **shadow root** so host-site CSS can't leak in or out.
+On mount it does one request — `GET {apiBase}/v1/preview/:id/boot` — and gets back
+a `BootConfig` (lead, persona, offer, engagement weights, feature flags, resumed
+conversation). Everything downstream is driven by that payload.
+
+- **Silent analytics** track scroll depth, section dwell, clicks, CTA hovers, and
+  active time, feeding a **weighted engagement score**. When it crosses the
+  threshold (or exit-intent / a fallback timer fires), Phillip pings.
+- **Streaming chat** — messages POST to the backend and the reply streams back
+  over SSE (fetch + `ReadableStream`), so it types in real time.
+- **Light iteration** — small asks (copy, palette, photo swaps, hours) become a
+  change-set, go to the Build agent, and the preview is swapped. Bigger asks or
+  too many rounds hand off.
+
+### What's built vs stubbed
+
+The **core loop is fully implemented**: Landing → Ping → Reaction → Light
+iteration, plus analytics and the funnel (`delivered → opened → engaged → reacted
+→ iterating/escalated → checkout → paid → live`).
+
+**Escalation (05), Checkout (06), and Setup (07) are typed stubs** with minimal
+reachable UI — clean interfaces in `src/stubs/` ready to wire to the Email agent,
+real Stripe, and provisioning. (The drop-in checkout simulates success so the
+demo can walk all the way to "live".)
+
+---
+
+## Develop
+
+```bash
+pnpm install
+pnpm dev        # Vite playground: a fake generated site + Phillip, backed by an
+                # in-browser MSW mock — the whole flow runs with no real services
+```
+
+| Script | Does |
+| --- | --- |
+| `pnpm dev` | Run the playground against the MSW mock |
+| `pnpm build` | Dual build via tsup: React entry (ESM/CJS) + drop-in IIFE |
+| `pnpm test` | Vitest (jsdom + MSW) |
+| `pnpm typecheck` | `tsc --noEmit` |
+| `pnpm lint` / `pnpm format` | Biome |
+| `pnpm size` | size-limit budgets on the built bundles |
+
+The mock backend (`mock/`) implements the same wire contract the real nutz.inc
+backend will implement, and the **same handlers run in the tests** — so the
+contract is defined once.
+
+---
+
+## Architecture
+
+```
+src/
+  index.ts / preview.ts   public entries (React component / IIFE auto-mount)
+  mount.tsx               shadow host + adopted styles + React root inside shadow
+  core/                   boot + runtime config + provider
+  analytics/              DOM signal trackers (scroll, sections, idle, clicks)
+  engagement/             pure score + trigger engine (when to ping)
+  transport/              REST + fetch-based SSE client (injectable fetch)
+  chat/                   bubble, panel, conversation, streaming hook
+  intent/ funnel/         intent classification + funnel stage emitter
+  iteration/              light-iteration capture, job polling, panel
+  stubs/                  escalation / payment / setup (Phase 05–07)
+  types/                  the shared records (Lead, Preview, Session, …)
+```
+
+---
+
+## A note on naming
+
+The original spec imports `@nutz/preview` and a `PreviewAgent` component; this
+package ships as **`@nutz/phillip`** with `<Phillip>` as the primary export and
+`PreviewAgent` kept as an alias, so the spec's snippet still works.

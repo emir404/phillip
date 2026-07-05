@@ -1,138 +1,49 @@
-# @nutz/phillip
+# nutz · Phillip monorepo
 
-**The autonomous preview-to-paid embed.**
+Two things live here:
 
-nutz scouts a business, auto-builds them a website, and sends a link. **Phillip**
-is the layer that turns that cold preview into a paying customer with no human in
-the loop: he watches how the lead behaves, opens a chat in the bottom-right
-wearing our salesperson's face, handles feedback, iterates on the site, takes
-payment, and runs setup.
+| Workspace | What it is |
+| --- | --- |
+| [`packages/phillip`](packages/phillip) | **The embed.** The `@nutz/phillip` client widget the Build agent drops into every generated preview — this is the script we publish to our CDN/storage to install Phillip and his content onto any site. |
+| [`apps/dashboard`](apps/dashboard) | **The dashboard.** An analytics app for the team to watch every lead move through the funnel, read their engagement signals, and open the full conversation. |
 
-This package is *the embed* — a deliberately dumb client widget the Build agent
-drops into every preview. It boots with a single `previewId` and pulls everything
-else (persona, offer, state, Stripe keys) from the backend at runtime, so secrets
-never touch the page and the offer/script/persona can change without redeploying
-any site.
+The dashboard reads the **same records and event types** the embed emits (`@nutz/phillip`), so the wire contract is defined once and shared across both.
 
-> The loop: **Land → Engage → React → Iterate or escalate → Pay → Set up**
+## Layout
 
----
-
-## Install
-
-```bash
-npm i @nutz/phillip   # or pnpm / yarn
 ```
-
-`react` and `react-dom` (>=18.2) are peer dependencies.
-
-### React
-
-```tsx
-import { Phillip } from "@nutz/phillip";
-
-export default function Page() {
-  return (
-    <>
-      <GeneratedSite />
-      <Phillip previewId="prv_8f2a" />
-    </>
-  );
-}
+.
+├─ package.json            workspace root (private) — orchestration scripts
+├─ pnpm-workspace.yaml     packages/* + apps/*
+├─ biome.json              shared lint/format config
+├─ packages/
+│  └─ phillip/             the @nutz/phillip embed (widget, mock backend, playground)
+└─ apps/
+   └─ dashboard/           the @nutz/dashboard analytics app
 ```
-
-`<PreviewAgent>` is exported as a back-compat alias for `<Phillip>`.
-
-### Drop-in (non-React)
-
-The same thing as a single tag — React is bundled into this build:
-
-```html
-<script
-  src="https://cdn.jsdelivr.net/npm/@nutz/phillip/preview.js"
-  data-preview-id="prv_8f2a"
-  defer
-></script>
-```
-
-Optional attributes: `data-api-base` (backend origin; defaults to same-origin),
-`data-debug` (verbose console logging).
-
----
-
-## How it works
-
-The embed renders into a **shadow root** so host-site CSS can't leak in or out.
-On mount it does one request — `GET {apiBase}/v1/preview/:id/boot` — and gets back
-a `BootConfig` (lead, persona, offer, engagement weights, feature flags, resumed
-conversation). Everything downstream is driven by that payload.
-
-- **Silent analytics** track scroll depth, section dwell, clicks, CTA hovers, and
-  active time, feeding a **weighted engagement score**. When it crosses the
-  threshold (or exit-intent / a fallback timer fires), Phillip pings.
-- **Streaming chat** — messages POST to the backend and the reply streams back
-  over SSE (fetch + `ReadableStream`), so it types in real time.
-- **Light iteration** — small asks (copy, palette, photo swaps, hours) become a
-  change-set, go to the Build agent, and the preview is swapped. Bigger asks or
-  too many rounds hand off.
-
-### What's built vs stubbed
-
-The **core loop is fully implemented**: Landing → Ping → Reaction → Light
-iteration, plus analytics and the funnel (`delivered → opened → engaged → reacted
-→ iterating/escalated → checkout → paid → live`).
-
-**Escalation (05), Checkout (06), and Setup (07) are typed stubs** with minimal
-reachable UI — clean interfaces in `src/stubs/` ready to wire to the Email agent,
-real Stripe, and provisioning. (The drop-in checkout simulates success so the
-demo can walk all the way to "live".)
-
----
 
 ## Develop
 
+Requires pnpm (`corepack enable` gives you the pinned version) and Node >=18.
+
 ```bash
-pnpm install
-pnpm dev        # Vite playground: a fake generated site + Phillip, backed by an
-                # in-browser MSW mock — the whole flow runs with no real services
+pnpm install            # install every workspace at once
+pnpm dev                # the embed playground (fake site + Phillip, MSW mock)
+pnpm dev:dashboard      # the analytics dashboard
 ```
 
 | Script | Does |
 | --- | --- |
-| `pnpm dev` | Run the playground against the MSW mock |
-| `pnpm build` | Dual build via tsup: React entry (ESM/CJS) + drop-in IIFE |
-| `pnpm test` | Vitest (jsdom + MSW) |
-| `pnpm typecheck` | `tsc --noEmit` |
-| `pnpm lint` / `pnpm format` | Biome |
-| `pnpm size` | size-limit budgets on the built bundles |
+| `pnpm dev` | Phillip embed playground (`@nutz/phillip`) |
+| `pnpm dev:dashboard` | Analytics dashboard (`@nutz/dashboard`) |
+| `pnpm build` | Build every workspace |
+| `pnpm build:phillip` / `pnpm build:dashboard` | Build one workspace |
+| `pnpm test` | Run tests across workspaces (Vitest) |
+| `pnpm typecheck` | `tsc --noEmit` across workspaces |
+| `pnpm lint` / `pnpm format` | Biome (shared config) |
+| `pnpm size` | size-limit budgets on the built embed bundles |
 
-The mock backend (`mock/`) implements the same wire contract the real nutz.inc
-backend will implement, and the **same handlers run in the tests** — so the
-contract is defined once.
+See each workspace's own README for details:
 
----
-
-## Architecture
-
-```
-src/
-  index.ts / preview.ts   public entries (React component / IIFE auto-mount)
-  mount.tsx               shadow host + adopted styles + React root inside shadow
-  core/                   boot + runtime config + provider
-  analytics/              DOM signal trackers (scroll, sections, idle, clicks)
-  engagement/             pure score + trigger engine (when to ping)
-  transport/              REST + fetch-based SSE client (injectable fetch)
-  chat/                   bubble, panel, conversation, streaming hook
-  intent/ funnel/         intent classification + funnel stage emitter
-  iteration/              light-iteration capture, job polling, panel
-  stubs/                  escalation / payment / setup (Phase 05–07)
-  types/                  the shared records (Lead, Preview, Session, …)
-```
-
----
-
-## A note on naming
-
-The original spec imports `@nutz/preview` and a `PreviewAgent` component; this
-package ships as **`@nutz/phillip`** with `<Phillip>` as the primary export and
-`PreviewAgent` kept as an alias, so the spec's snippet still works.
+- [`packages/phillip/README.md`](packages/phillip/README.md)
+- [`apps/dashboard/README.md`](apps/dashboard/README.md)
