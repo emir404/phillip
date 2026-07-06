@@ -67,9 +67,13 @@ On mount it does one request — `GET {apiBase}/v1/preview/:id/boot` — and get
 a `BootConfig` (lead, persona, offer, engagement weights, feature flags, resumed
 conversation). Everything downstream is driven by that payload.
 
-- **Silent analytics** track scroll depth, section dwell, clicks, CTA hovers, and
-  active time, feeding a **weighted engagement score**. When it crosses the
-  threshold (or exit-intent / a fallback timer fires), Phillip pings.
+- **Silent analytics** track scroll depth, per-section dwell, clicks, CTA hovers,
+  gallery/video/contact interactions, and active time, feeding a **weighted
+  engagement score**. When it crosses the threshold (or exit-intent / a fallback
+  timer fires), Phillip pings. A periodic `signals_snapshot` event ships the
+  consolidated picture (active time, scroll, per-section dwell = the heatmap, and
+  all signal counts) to the backend on every flush and on page hide — that's the
+  raw data the [dashboard](../../apps/dashboard) turns into the **agent feed**.
 - **Streaming chat** — messages POST to the backend and the reply streams back
   over SSE (fetch + `ReadableStream`), so it types in real time.
 - **Light iteration** — small asks (copy, palette, photo swaps, hours) become a

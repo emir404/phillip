@@ -54,8 +54,13 @@ docker run -p 5174:5174 -v phillip-data:/data phillip-dashboard
 ```
 
 It seeds sample data on first boot and persists everything agents `POST` to its
-`/v1` API. See [`apps/dashboard/README.md`](apps/dashboard/README.md) for the API
-contract, the `PHILLIP_DATA_FILE` setting, and the serverless note.
+`/v1` API, and exposes an **agent feed** at `GET /v1/export` (JSON or NDJSON) —
+every lead distilled into metrics, a section **attention heatmap**, and a
+synthesized brief (requested changes, objections, winning sections, recommended
+actions) for downstream agents to mass-produce sites. See
+[`apps/dashboard/README.md`](apps/dashboard/README.md) for the API contract, the
+analytics/heatmap/feed details, the `PHILLIP_DATA_FILE` setting, and the
+serverless note.
 
 See each workspace's own README for details:
 

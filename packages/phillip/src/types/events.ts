@@ -9,6 +9,7 @@ export type EventType =
   | "pageview"
   | "scroll_depth"
   | "section_view"
+  | "signals_snapshot"
   | "time_tick"
   | "active"
   | "idle"
@@ -38,6 +39,24 @@ export type EventType =
 export interface EventPayloadMap {
   scroll_depth: { pct: number };
   section_view: { section: string; visibleMs: number };
+  /**
+   * A periodic consolidated read of the session's attention so the backend and
+   * downstream agents get a full picture without replaying every raw event:
+   * active time, max scroll, per-section dwell (seconds — the heatmap), and the
+   * running intent-signal counts, plus the current engagement score.
+   */
+  signals_snapshot: {
+    activeTimeSec: number;
+    scrollDepthPct: number;
+    sectionsViewed: number;
+    sections: Record<string, number>;
+    clicks: number;
+    ctaHovers: number;
+    galleryOpens: number;
+    videoPlays: number;
+    contactInteractions: number;
+    score: number;
+  };
   cta_hover: { target: string };
   ping_shown: { reason: PingReason; score: number };
   conversation_opened: { trigger: PingReason | "manual" };
