@@ -1,27 +1,27 @@
 {
   "name": "@nutz/dashboard",
   "version": "0.1.0",
-  "description": "The nutz team's analytics dashboard — watch every lead move through Phillip's funnel, read their engagement signals, and open the full conversation.",
+  "description": "The nutz team's analytics dashboard + ingestion backend for Phillip — agents POST lead, event, and conversation data; it persists and visualizes the funnel.",
   "type": "module",
   "license": "UNLICENSED",
   "private": true,
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
+    "dev": "next dev -p 5174",
+    "build": "next build",
+    "start": "next start -p 5174",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@nutz/phillip": "workspace:*",
     "motion": "^12.42.0",
+    "next": "^14.2.15",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@types/node": "^22.10.2",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.4",
-    "typescript": "^5.7.2",
-    "vite": "^5.4.11"
+    "typescript": "^5.7.2"
   }
 }

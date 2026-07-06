@@ -1,6 +1,6 @@
 import { m, useReducedMotion } from "motion/react";
-import type { DashboardLead } from "../data/sample";
 import { relativeTime } from "../lib/analytics";
+import type { DashboardLead } from "../lib/types";
 import { drawer, item, scrim } from "../motion";
 import { EventTimeline } from "./EventTimeline";
 import { ScoreRing } from "./ScoreRing";

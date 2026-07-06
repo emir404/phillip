@@ -1,5 +1,5 @@
 import type { LeadStage } from "@nutz/phillip";
-import type { DashboardLead } from "../data/sample";
+import type { DashboardLead } from "./types";
 
 // The funnel order mirrors the embed's funnel/stages.ts. iterating + escalated
 // share a tier (two branches off "reacted"). Defined here so the dashboard has

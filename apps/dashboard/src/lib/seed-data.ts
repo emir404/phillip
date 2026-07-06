@@ -1,18 +1,9 @@
-import type { AnalyticsEvent, Conversation, Lead, Order, Preview, Session } from "@nutz/phillip";
+import type { AnalyticsEvent, Session } from "@nutz/phillip";
+import type { DashboardLead } from "./types";
 
-// A composite of the shared records the way the team reads a single lead: the
-// lead + its preview + session context + the engagement score, its event
-// stream, and (once they talk) the conversation. This is exactly the shape a
-// real backend would assemble from the same records the embed writes.
-export interface DashboardLead {
-  lead: Lead;
-  preview: Preview;
-  session: Session;
-  engagementScore: number;
-  events: AnalyticsEvent[];
-  conversation?: Conversation;
-  order?: Order;
-}
+// The seed the store loads on first run so a fresh deploy shows real data
+// immediately. In production the same shapes arrive from the embed/agents via
+// the ingestion API and get persisted alongside these.
 
 const now = Date.now();
 const min = 60_000;
@@ -43,7 +34,7 @@ function mobile(os: string, browser: string): Session["device"] {
 
 // --- the leads -------------------------------------------------------------
 
-export const leads: DashboardLead[] = [
+export const sampleLeads: DashboardLead[] = [
   {
     lead: {
       id: "lead_marisol",

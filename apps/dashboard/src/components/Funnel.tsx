@@ -1,6 +1,6 @@
 import { m, useReducedMotion } from "motion/react";
-import type { DashboardLead } from "../data/sample";
 import { funnel } from "../lib/analytics";
+import type { DashboardLead } from "../lib/types";
 import { container, item } from "../motion";
 import { STAGE_TONE } from "./StageBadge";
 
