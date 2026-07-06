@@ -68,14 +68,23 @@ export class Tracker {
     this.track("pageview", {});
 
     this.tickTimer = setInterval(() => this.tick(), TICK_MS);
-    this.flushTimer = setInterval(() => void this.flush(), FLUSH_MS);
+    this.flushTimer = setInterval(() => {
+      this.emitSnapshot();
+      void this.flush();
+    }, FLUSH_MS);
 
-    const onHide = () => void this.flush();
+    const onHide = () => {
+      this.emitSnapshot();
+      void this.flush();
+    };
     window.addEventListener("pagehide", onHide);
     this.cleanups.push(() => window.removeEventListener("pagehide", onHide));
 
     const onVisibility = () => {
-      if (document.visibilityState === "hidden") void this.flush();
+      if (document.visibilityState === "hidden") {
+        this.emitSnapshot();
+        void this.flush();
+      }
     };
     document.addEventListener("visibilitychange", onVisibility);
     this.cleanups.push(() => document.removeEventListener("visibilitychange", onVisibility));
@@ -97,6 +106,25 @@ export class Tracker {
 
   score(): number {
     return computeScore(this.snapshot(), this.config.weights);
+  }
+
+  /**
+   * A consolidated read of the session's attention — the single event that
+   * carries the full analytics + heatmap picture to the backend/agents.
+   */
+  private emitSnapshot(): void {
+    this.track("signals_snapshot", {
+      activeTimeSec: Math.round(this.activeTimeSec),
+      scrollDepthPct: this.signals.scrollDepthPct,
+      sectionsViewed: this.sections.distinctCount(),
+      sections: this.sections.dwellBySection(),
+      clicks: this.signals.clicks,
+      ctaHovers: this.signals.ctaHovers,
+      galleryOpens: this.signals.galleryOpens,
+      videoPlays: this.signals.videoPlays,
+      contactInteractions: this.signals.contactInteractions,
+      score: Math.round(this.score()),
+    });
   }
 
   private tick(): void {
@@ -149,6 +177,7 @@ export class Tracker {
   stop(): void {
     if (this.tickTimer) clearInterval(this.tickTimer);
     if (this.flushTimer) clearInterval(this.flushTimer);
+    this.emitSnapshot();
     this.activity.stop();
     this.sections.stop();
     this.signals.stop();

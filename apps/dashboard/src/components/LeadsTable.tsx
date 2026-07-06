@@ -1,6 +1,6 @@
 import { m, useReducedMotion } from "motion/react";
-import type { DashboardLead } from "../data/sample";
 import { relativeTime } from "../lib/analytics";
+import type { DashboardLead } from "../lib/types";
 import { container, item } from "../motion";
 import { StageBadge } from "./StageBadge";
 

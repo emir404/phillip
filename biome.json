@@ -10,7 +10,16 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "ignore": ["**/dist", "**/coverage", "**/playground/public", "**/node_modules", "**/.vite"]
+    "ignore": [
+      "**/dist",
+      "**/coverage",
+      "**/playground/public",
+      "**/node_modules",
+      "**/.vite",
+      "**/.next",
+      "**/next-env.d.ts",
+      "**/.data"
+    ]
   },
   "formatter": {
     "enabled": true,

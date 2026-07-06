@@ -1,18 +1,9 @@
-import type { AnalyticsEvent, Conversation, Lead, Order, Preview, Session } from "@nutz/phillip";
+import type { AnalyticsEvent, Session } from "@nutz/phillip";
+import type { DashboardLead } from "./types";
 
-// A composite of the shared records the way the team reads a single lead: the
-// lead + its preview + session context + the engagement score, its event
-// stream, and (once they talk) the conversation. This is exactly the shape a
-// real backend would assemble from the same records the embed writes.
-export interface DashboardLead {
-  lead: Lead;
-  preview: Preview;
-  session: Session;
-  engagementScore: number;
-  events: AnalyticsEvent[];
-  conversation?: Conversation;
-  order?: Order;
-}
+// The seed the store loads on first run so a fresh deploy shows real data
+// immediately. In production the same shapes arrive from the embed/agents via
+// the ingestion API and get persisted alongside these.
 
 const now = Date.now();
 const min = 60_000;
@@ -43,7 +34,7 @@ function mobile(os: string, browser: string): Session["device"] {
 
 // --- the leads -------------------------------------------------------------
 
-export const leads: DashboardLead[] = [
+export const sampleLeads: DashboardLead[] = [
   {
     lead: {
       id: "lead_marisol",
@@ -94,6 +85,23 @@ export const leads: DashboardLead[] = [
       evt("ses_marisol", "checkout_started", {}, 20),
       evt("ses_marisol", "paid", {}, 18),
       evt("ses_marisol", "funnel", { from: "paid", to: "live", reason: "setup_complete" }, 8),
+      evt(
+        "ses_marisol",
+        "signals_snapshot",
+        {
+          activeTimeSec: 486,
+          scrollDepthPct: 96,
+          sectionsViewed: 5,
+          sections: { hero: 8.2, pricing: 22.4, gallery: 12.1, testimonials: 5.3, contact: 3.1 },
+          clicks: 9,
+          ctaHovers: 3,
+          galleryOpens: 1,
+          videoPlays: 0,
+          contactInteractions: 1,
+          score: 92,
+        },
+        8,
+      ),
     ],
     conversation: {
       id: "conv_marisol",
@@ -113,6 +121,8 @@ export const leads: DashboardLead[] = [
           role: "lead",
           text: "ohh this is really nice actually. can the hero photo be warmer?",
           ts: ago(39),
+          intent: "iterate",
+          sentiment: "positive",
         },
         {
           id: "m3",
@@ -169,6 +179,23 @@ export const leads: DashboardLead[] = [
       evt("ses_bloom", "conversation_opened", { trigger: "score" }, 18),
       evt("ses_bloom", "intent_classified", { intent: "positive", sentiment: "positive" }, 16),
       evt("ses_bloom", "checkout_started", {}, 3),
+      evt(
+        "ses_bloom",
+        "signals_snapshot",
+        {
+          activeTimeSec: 312,
+          scrollDepthPct: 88,
+          sectionsViewed: 4,
+          sections: { gallery: 24.6, pricing: 18.2, hero: 6.4, story: 4.1 },
+          clicks: 6,
+          ctaHovers: 2,
+          galleryOpens: 2,
+          videoPlays: 1,
+          contactInteractions: 0,
+          score: 74,
+        },
+        2,
+      ),
     ],
     conversation: {
       id: "conv_bloom",
@@ -229,6 +256,23 @@ export const leads: DashboardLead[] = [
       evt("ses_forge", "conversation_opened", { trigger: "score" }, 11),
       evt("ses_forge", "intent_classified", { intent: "iterate", sentiment: "neutral" }, 9),
       evt("ses_forge", "iteration_requested", { iterationId: "itr_forge", round: 1 }, 8),
+      evt(
+        "ses_forge",
+        "signals_snapshot",
+        {
+          activeTimeSec: 214,
+          scrollDepthPct: 62,
+          sectionsViewed: 4,
+          sections: { hero: 12.4, gallery: 9.1, services: 7.2, pricing: 2.6 },
+          clicks: 4,
+          ctaHovers: 2,
+          galleryOpens: 1,
+          videoPlays: 0,
+          contactInteractions: 0,
+          score: 61,
+        },
+        1,
+      ),
     ],
     conversation: {
       id: "conv_forge",
@@ -248,6 +292,8 @@ export const leads: DashboardLead[] = [
           role: "lead",
           text: "colors are too bright. can it be darker / moodier?",
           ts: ago(9),
+          intent: "iterate",
+          sentiment: "neutral",
         },
         { id: "f3", role: "phillip", text: "got it — darker, moodier palette. on it.", ts: ago(8) },
       ],
@@ -292,6 +338,23 @@ export const leads: DashboardLead[] = [
         "ses_verde",
         "funnel",
         { from: "reacted", to: "escalated", reason: "heavy_or_round_cap" },
+        76,
+      ),
+      evt(
+        "ses_verde",
+        "signals_snapshot",
+        {
+          activeTimeSec: 268,
+          scrollDepthPct: 44,
+          sectionsViewed: 3,
+          sections: { menu: 28.3, hero: 5.1, hours: 2.2 },
+          clicks: 5,
+          ctaHovers: 1,
+          galleryOpens: 0,
+          videoPlays: 0,
+          contactInteractions: 2,
+          score: 58,
+        },
         76,
       ),
     ],
@@ -358,6 +421,23 @@ export const leads: DashboardLead[] = [
       evt("ses_pixel", "ping_shown", { reason: "score", score: 44 }, 6),
       evt("ses_pixel", "conversation_opened", { trigger: "score" }, 6),
       evt("ses_pixel", "intent_classified", { intent: "positive", sentiment: "positive" }, 5),
+      evt(
+        "ses_pixel",
+        "signals_snapshot",
+        {
+          activeTimeSec: 118,
+          scrollDepthPct: 55,
+          sectionsViewed: 3,
+          sections: { schedule: 11.4, hero: 6.2, pricing: 4.1 },
+          clicks: 3,
+          ctaHovers: 1,
+          galleryOpens: 0,
+          videoPlays: 0,
+          contactInteractions: 0,
+          score: 47,
+        },
+        4,
+      ),
     ],
     conversation: {
       id: "conv_pixel",
