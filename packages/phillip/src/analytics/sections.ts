@@ -58,6 +58,13 @@ export class SectionTracker {
     return (base + live) / 1000;
   }
 
+  /** Dwell (seconds, rounded) for every section seen — the heatmap source. */
+  dwellBySection(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const name of this.seen) out[name] = Math.round(this.dwellSec(name) * 10) / 10;
+    return out;
+  }
+
   distinctCount(): number {
     return this.seen.size;
   }
