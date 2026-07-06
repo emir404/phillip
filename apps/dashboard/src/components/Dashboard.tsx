@@ -59,7 +59,17 @@ export default function Dashboard({ initialLeads }: { initialLeads: DashboardLea
               <span className="live-dot" />
               live
             </span>
-            <span className="topbar-sub">every lead, end to end</span>
+            <a className="btn btn-ghost" href="/v1/export" target="_blank" rel="noreferrer">
+              Agent feed
+            </a>
+            <a
+              className="btn btn-primary"
+              href="/v1/export?format=ndjson"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Export NDJSON
+            </a>
           </m.div>
         </m.header>
 

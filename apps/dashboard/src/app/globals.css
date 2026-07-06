@@ -511,6 +511,161 @@ body {
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
+/* --- buttons --- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  text-decoration: none;
+  font-family: inherit;
+  transition: background 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
+  white-space: nowrap;
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-fg);
+  box-shadow: var(--shadow-sm);
+}
+.btn-primary:hover {
+  background: #000;
+}
+.btn-ghost {
+  background: rgba(15, 23, 42, 0.05);
+  color: var(--fg);
+  box-shadow: var(--ring);
+}
+.btn-ghost:hover {
+  background: rgba(15, 23, 42, 0.09);
+}
+.drawer-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* --- signals grid --- */
+.signals-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.signal-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.03);
+  box-shadow: var(--ring);
+}
+.signal-value {
+  font-size: 16px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+.signal-label {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+/* --- heatmap --- */
+.heatmap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.heatmap-empty {
+  color: var(--faint);
+  font-size: 13px;
+  margin: 0;
+}
+.heatmap-row {
+  display: grid;
+  grid-template-columns: 96px 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+.heatmap-name {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.heatmap-track {
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+}
+.heatmap-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+.heatmap-time {
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 44px;
+  text-align: right;
+}
+
+/* --- agent brief --- */
+.brief {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.brief-block {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.brief-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.brief-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.brief-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.brief-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.05);
+  color: var(--muted);
+  text-transform: capitalize;
+}
+.brief-tag-win {
+  background: rgba(217, 119, 6, 0.14);
+  color: var(--amber);
+}
+
 /* --- context grid --- */
 .context-grid {
   display: grid;
