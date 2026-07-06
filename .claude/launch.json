@@ -12,6 +12,12 @@
       "runtimeExecutable": "sh",
       "runtimeArgs": ["-c", "VITE_PHILLIP_BACKEND=live pnpm --filter @nutz/phillip dev"],
       "port": 5173
+    },
+    {
+      "name": "phillip-dashboard",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@nutz/dashboard", "dev"],
+      "port": 5174
     }
   ]
 }

@@ -1,6 +1,7 @@
 import { m, useReducedMotion } from "motion/react";
 import type { DashboardLead } from "../data/sample";
 import { relativeTime } from "../lib/analytics";
+import { initials, toneFor } from "../lib/avatar";
 import { container, item } from "../motion";
 import { StageBadge } from "./StageBadge";
 
@@ -44,8 +45,13 @@ export function LeadsTable({
             whileHover={reduce ? undefined : { x: 2 }}
           >
             <span className="leads-biz">
-              <span className="leads-biz-name">{l.lead.business}</span>
-              <span className="leads-biz-sub">{l.lead.contact ?? l.lead.industry}</span>
+              <span className={`avatar tone-${toneFor(l.lead.business)}`}>
+                {initials(l.lead.business)}
+              </span>
+              <span className="leads-biz-text">
+                <span className="leads-biz-name">{l.lead.business}</span>
+                <span className="leads-biz-sub">{l.lead.contact ?? l.lead.industry}</span>
+              </span>
             </span>
             <span>
               <StageBadge stage={l.lead.stage} />
@@ -62,6 +68,7 @@ export function LeadsTable({
             <span className="leads-seen tnum">{relativeTime(l.session.lastSeen)}</span>
           </m.button>
         ))}
+        {leads.length === 0 ? <p className="leads-empty">no leads match that search.</p> : null}
       </m.div>
     </section>
   );

@@ -117,10 +117,10 @@ export const leads: DashboardLead[] = [
         {
           id: "m3",
           role: "phillip",
-          text: "totally — warmer hero, i'll punch up the headline too. give me a sec.",
+          text: "totally, warmer hero, i'll punch up the headline too. give me a sec.",
           ts: ago(38),
         },
-        { id: "m4", role: "phillip", text: "done — refresh to see it ✨", ts: ago(34) },
+        { id: "m4", role: "phillip", text: "done, refresh to see it ✨", ts: ago(34) },
         { id: "m5", role: "lead", text: "love it. let's do it.", ts: ago(22) },
         { id: "m6", role: "phillip", text: "payment received. let's get you live 🎉", ts: ago(18) },
       ],
@@ -180,14 +180,14 @@ export const leads: DashboardLead[] = [
         {
           id: "b1",
           role: "phillip",
-          text: "hey, i'm phillip. put this together for bloom & co. — what's the first thing you notice?",
+          text: "hey, i'm phillip. put this together for bloom & co. what's the first thing you notice?",
           ts: ago(18),
         },
         { id: "b2", role: "lead", text: "the gallery is gorgeous. how much is it?", ts: ago(17) },
         {
           id: "b3",
           role: "phillip",
-          text: "$49/mo — site, your domain, hosting, edits anytime. want to make it live?",
+          text: "$49/mo, site, your domain, hosting, edits anytime. want to make it live?",
           ts: ago(16),
         },
         { id: "b4", role: "lead", text: "yeah let's do it", ts: ago(3) },
@@ -249,7 +249,7 @@ export const leads: DashboardLead[] = [
           text: "colors are too bright. can it be darker / moodier?",
           ts: ago(9),
         },
-        { id: "f3", role: "phillip", text: "got it — darker, moodier palette. on it.", ts: ago(8) },
+        { id: "f3", role: "phillip", text: "got it, darker, moodier palette. on it.", ts: ago(8) },
       ],
     },
   },
@@ -305,7 +305,7 @@ export const leads: DashboardLead[] = [
         {
           id: "v1",
           role: "phillip",
-          text: "hola — soy phillip. armé esto para casa verde. ¿qué te parece?",
+          text: "hola, soy phillip. armé esto para casa verde. ¿qué te parece?",
           ts: ago(82),
         },
         {
@@ -417,7 +417,7 @@ export const leads: DashboardLead[] = [
         {
           id: "h1",
           role: "phillip",
-          text: "hey, i'm phillip — made this for harbor books. take a look, no rush.",
+          text: "hey, i'm phillip, made this for harbor books. take a look, no rush.",
           ts: ago(4),
         },
       ],

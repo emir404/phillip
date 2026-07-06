@@ -1,18 +1,18 @@
 import type { LeadStage } from "@nutz/phillip";
 import { STAGE_LABEL } from "../lib/analytics";
 
-// A stage tone maps each funnel stage to a color family used by the badge and
-// the funnel bars, so the same stage reads the same everywhere.
+// Shades of the one signature blue track how far along a lead is — darker and
+// bolder the further into the pipeline. Danger is the only color exception.
 export const STAGE_TONE: Record<LeadStage, string> = {
-  delivered: "slate",
-  opened: "slate",
-  engaged: "blue",
-  reacted: "violet",
-  iterating: "amber",
-  escalated: "rose",
-  checkout: "teal",
-  paid: "green",
-  live: "green",
+  delivered: "b1",
+  opened: "b1",
+  engaged: "b2",
+  reacted: "b3",
+  iterating: "b3",
+  escalated: "danger",
+  checkout: "b4",
+  paid: "b5",
+  live: "b6",
 };
 
 export function StageBadge({ stage }: { stage: LeadStage }) {

@@ -1,15 +1,21 @@
 import { m, useReducedMotion } from "motion/react";
+import { useId } from "react";
 
 // A compact circular gauge for the engagement score. The arc draws itself in
-// (stroke-dashoffset) — a small, satisfying reveal that respects reduced motion.
+// (stroke-dashoffset) — a small, satisfying reveal that respects reduced
+// motion. A thin stroke with a subtle brand gradient, not a thick flat ring:
+// one accent color, but with the light-touch depth a gradient gives.
 export function ScoreRing({ score, size = 64 }: { score: number; size?: number }) {
   const reduce = useReducedMotion() ?? false;
-  const stroke = 6;
+  // Strip colons: React's useId format (":r0:") isn't safe inside an SVG
+  // url(#...) reference in every browser.
+  const gradientId = `score-ring-${useId().replace(/:/g, "")}`;
+  const compact = size <= 40;
+  const stroke = compact ? 2.5 : 4;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const pct = Math.max(0, Math.min(100, score));
   const offset = c * (1 - pct / 100);
-  const tone = pct >= 70 ? "#16a34a" : pct >= 40 ? "#d97706" : "#64748b";
 
   return (
     <div className="score-ring" style={{ width: size, height: size }}>
@@ -20,12 +26,18 @@ export function ScoreRing({ score, size = 64 }: { score: number; size?: number }
         role="img"
         aria-label={`engagement score ${pct} out of 100`}
       >
+        <defs>
+          <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="var(--brand-300)" />
+            <stop offset="100%" stopColor="var(--brand-600)" />
+          </linearGradient>
+        </defs>
         <circle
           cx={size / 2}
           cy={size / 2}
           r={r}
           fill="none"
-          stroke="rgba(15,23,42,.08)"
+          stroke="var(--gray-200)"
           strokeWidth={stroke}
         />
         <m.circle
@@ -33,7 +45,7 @@ export function ScoreRing({ score, size = 64 }: { score: number; size?: number }
           cy={size / 2}
           r={r}
           fill="none"
-          stroke={tone}
+          stroke={`url(#${gradientId})`}
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={c}
@@ -45,7 +57,10 @@ export function ScoreRing({ score, size = 64 }: { score: number; size?: number }
           }
         />
       </svg>
-      <span className="score-ring-value tnum" style={{ color: tone }}>
+      <span
+        className="score-ring-value tnum"
+        style={{ color: "var(--brand-600)", fontSize: compact ? 11 : 18 }}
+      >
         {pct}
       </span>
     </div>
