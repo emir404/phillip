@@ -6,6 +6,7 @@ import { log } from "../lib/log";
 import type { TransportClient } from "../transport";
 import type { SendMessageRequest } from "../transport";
 import type { Persona } from "../types/boot";
+import type { Attachment } from "../types/records";
 
 // The two doors at the reaction step. Ids match what the backend classifier
 // (and the mock) expect.
@@ -36,7 +37,7 @@ export interface ConversationApi {
   send: (input: { text?: string; quickReply?: QuickReply }) => void;
   appendSystem: (text: string, error?: boolean) => void;
   appendPhillip: (text: string) => void;
-  appendLead: (text: string) => void;
+  appendLead: (text: string, attachments?: Attachment[]) => void;
   /** Lovable-style "working…" bubble; returns its id so callers can resolve it. */
   appendPending: (text: string) => string;
   /** Flips a pending bubble to its final text once the work is actually done. */
@@ -86,8 +87,11 @@ export function useConversation(opts: UseConversationOptions): ConversationApi {
 
   // The lead's side of a sub-flow that doesn't go through send() (e.g. a
   // revise request), so it still reads as a normal turn in the transcript.
-  const appendLead = (text: string): void => {
-    setMessages((m) => [...m, { id: prefixedId("msg"), role: "lead", text, ts: nowIso() }]);
+  const appendLead = (text: string, attachments?: Attachment[]): void => {
+    setMessages((m) => [
+      ...m,
+      { id: prefixedId("msg"), role: "lead", text, ts: nowIso(), attachments },
+    ]);
   };
 
   const appendPending = (text: string): string => {

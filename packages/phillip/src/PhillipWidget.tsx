@@ -26,6 +26,7 @@ import {
 import type { TransportClient } from "./transport";
 import type { BootConfig } from "./types/boot";
 import type { PingReason } from "./types/events";
+import type { Attachment } from "./types/records";
 
 export interface PhillipWidgetProps {
   runtime: RuntimeConfig;
@@ -171,9 +172,9 @@ function Ready({
   // instruction (Lovable-style) — no separate panel, no re-asking, no
   // yes/no gate to click through first. Only a genuinely heavy ask or the
   // revision cap detours into a different flow.
-  const onReviseSubmit = (text: string) => {
-    convo.appendLead(text);
-    const changeSet = captureChangeSet([], text);
+  const onReviseSubmit = (text: string, attachments?: Attachment[]) => {
+    convo.appendLead(text, attachments);
+    const changeSet = captureChangeSet([], text, attachments);
     if (isHeavyRequest(changeSet)) {
       convo.appendPhillip(
         "that's a bigger change and worth doing right. drop your email and i'll follow up once it's built.",

@@ -99,9 +99,18 @@ export interface ChangeItem {
   note?: string;
 }
 
+/** A photo or file the lead attached to a change request (e.g. their logo). */
+export interface Attachment {
+  name: string;
+  mediaType: string;
+  /** data: URL — read client-side, never uploaded to a separate host by the widget itself. */
+  dataUrl: string;
+}
+
 export interface ChangeSet {
   items: ChangeItem[];
   freeText?: string;
+  attachments?: Attachment[];
 }
 
 export type IterationStatus = "queued" | "processing" | "done" | "failed";

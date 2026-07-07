@@ -1,7 +1,7 @@
 import { m, useReducedMotion } from "motion/react";
 import type { Message as Msg } from "../intent/types";
 import { messageVariants } from "../overlay/motion";
-import { BubbleTail } from "../ui/icons";
+import { BubbleTail, FileIcon, PhotoIcon } from "../ui/icons";
 
 // A single iMessage-style bubble. No per-message avatar (iMessage doesn't show
 // one), and `tail` is true only on the last bubble of a consecutive run — the
@@ -36,6 +36,19 @@ export function Message({ message, tail }: { message: Msg; tail: boolean }) {
               : undefined
           }
         >
+          {message.attachments?.length ? (
+            <div className="msg-attachments">
+              {message.attachments.map((a) => (
+                <span key={a.name} className="msg-attachment-chip" title={a.name}>
+                  {a.mediaType.startsWith("image/") ? (
+                    <PhotoIcon size={15} />
+                  ) : (
+                    <FileIcon size={15} />
+                  )}
+                </span>
+              ))}
+            </div>
+          ) : null}
           {message.text}
           {tail ? <BubbleTail className="msg-tail" /> : null}
         </m.div>

@@ -125,12 +125,31 @@ export interface ReviseSiteOptions {
   model: string;
   previewId: string;
   changeRequest: string;
+  /**
+   * Already-hosted URLs for any photos/files the lead attached (see
+   * apps/server/src/assets.ts) — the model just references these directly in
+   * an <img> tag rather than being sent the image bytes to reproduce.
+   */
+  attachmentUrls?: string[];
 }
 
 /** Send the current page + the lead's requested change to Claude, store the result. */
 export async function reviseSite(opts: ReviseSiteOptions): Promise<SiteEntry> {
-  const { anthropic, model, previewId, changeRequest } = opts;
+  const { anthropic, model, previewId, changeRequest, attachmentUrls } = opts;
   const current = getOrSeed(previewId);
+
+  const attachmentNote = attachmentUrls?.length
+    ? [
+        "",
+        "",
+        `the lead attached ${attachmentUrls.length > 1 ? "these files" : "this file"}, already hosted at`,
+        `the URL${attachmentUrls.length > 1 ? "s" : ""} below. if the request implies using it as a logo/photo`,
+        "(or doesn't say otherwise, but attaching a file usually means to use it), insert an <img> tag with",
+        "that exact src wherever it belongs, sized sensibly for the spot (e.g. a logo in the nav should be a",
+        "fixed height like 32px, not full width). don't invent a different image.",
+        ...attachmentUrls.map((u) => `- ${u}`),
+      ].join("\n")
+    : "";
 
   const message = await anthropic.messages.create({
     model,
@@ -145,7 +164,7 @@ export async function reviseSite(opts: ReviseSiteOptions): Promise<SiteEntry> {
     messages: [
       {
         role: "user",
-        content: `current site html:\n${current.html}\n\nrequested change: ${changeRequest}`,
+        content: `current site html:\n${current.html}\n\nrequested change: ${changeRequest}${attachmentNote}`,
       },
     ],
   });

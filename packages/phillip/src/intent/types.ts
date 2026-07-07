@@ -1,4 +1,5 @@
 // Conversation primitives (SPEC.md "Conversation" record + Phase 03 routing).
+import type { Attachment } from "../types/records";
 
 export type Intent = "positive" | "iterate" | "objection" | "escalate" | "unknown";
 
@@ -20,6 +21,8 @@ export interface Message {
   intent?: Intent;
   sentiment?: Sentiment;
   quickReplies?: QuickReply[];
+  /** Photos/files the lead attached to this message (e.g. a logo upload). */
+  attachments?: Attachment[];
   /** True while the assistant reply is still streaming in. */
   streaming?: boolean;
   /** True while a background job (e.g. a revision) this bubble represents is still running. */

@@ -2,6 +2,7 @@
 // Mock mode never calls a model, so it can't parse arbitrary requests — instead
 // it keyword-matches into a small set of visible theme knobs, with a fallback
 // that always changes something, so a revision never lands as a no-op.
+import type { Attachment } from "../src/types/records";
 
 export interface MockSiteState {
   version: number;
@@ -9,6 +10,7 @@ export interface MockSiteState {
   premium: boolean;
   tagline: string;
   businessName: string;
+  logoDataUrl?: string;
 }
 
 const DEFAULT_TAGLINE = "wood-fired seafood and natural wine, two blocks from the water.";
@@ -42,12 +44,22 @@ export function getSite(previewId: string): MockSiteState {
   return { ...getOrInit(previewId) };
 }
 
-export function reviseSite(previewId: string, changeRequest: string): MockSiteState {
+export function reviseSite(
+  previewId: string,
+  changeRequest: string,
+  attachments?: Attachment[],
+): MockSiteState {
   const s = getOrInit(previewId);
   const text = changeRequest.toLowerCase();
   const renameMatch = changeRequest.match(RENAME_RE);
+  const image = attachments?.find((a) => a.mediaType.startsWith("image/"));
 
-  if (/premium|upscale|luxur|elevated|elegant/.test(text)) {
+  // An attached photo is an unambiguous signal — a lead uploading a file
+  // means "use this", regardless of what (if anything) they typed alongside
+  // it. Matches the example use case: drop in a logo, it lands in the nav.
+  if (image) {
+    s.logoDataUrl = image.dataUrl;
+  } else if (/premium|upscale|luxur|elevated|elegant/.test(text)) {
     s.premium = true;
     s.accent = "#18181b";
   } else if (/warm/.test(text)) {

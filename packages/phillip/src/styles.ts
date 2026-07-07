@@ -315,8 +315,8 @@ export const styles = `
 
 /* --- composer (single frameless glass pill) --- */
 .composer {
-  display: flex; gap: 6px; align-items: center;
-  padding: 6px 6px 6px 16px;
+  display: flex; gap: 4px; align-items: center;
+  padding: 6px;
   background: var(--p-glass);
   backdrop-filter: blur(var(--p-glass-blur)) saturate(1.6);
   -webkit-backdrop-filter: blur(var(--p-glass-blur)) saturate(1.6);
@@ -325,16 +325,63 @@ export const styles = `
 }
 .composer input {
   flex: 1; border: none; background: transparent; outline: none;
-  padding: 6px 0; font-size: 14px; font-family: inherit; color: var(--p-fg);
+  padding: 6px 4px; font-size: 14px; font-family: inherit; color: var(--p-fg);
 }
 .composer input::placeholder { color: var(--p-muted); }
-.composer button {
+.composer-send {
   border: none; border-radius: 50%; width: 36px; height: 36px; flex: none;
   background: var(--p-accent); color: var(--p-accent-fg); cursor: pointer;
   display: grid; place-items: center;
   transition: opacity .14s ease, transform .14s ease, filter .14s ease;
 }
-.composer button:disabled { opacity: .35; cursor: default; filter: blur(.2px); transform: scale(.92); }
+.composer-send:disabled { opacity: .35; cursor: default; filter: blur(.2px); transform: scale(.92); }
+.composer-attach {
+  border: none; border-radius: 50%; width: 32px; height: 32px; flex: none;
+  background: transparent; color: var(--p-muted); cursor: pointer;
+  display: grid; place-items: center;
+  transition: background .14s ease, color .14s ease, transform .14s ease;
+}
+.composer-attach:hover { background: rgba(0,0,0,.06); color: var(--p-fg); }
+.composer-attach:disabled { opacity: .35; cursor: default; }
+
+/* --- attachment previews (pending, above the composer) --- */
+/* Deliberately plain: a neutral icon signaling "photo" or "file", never the
+   actual image content or filename — keeps the composer calm and avoids the
+   pending chip visually competing with the transcript above it. */
+.attach-preview { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 4px 8px; }
+.attach-chip {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; color: var(--p-muted);
+  background: var(--p-glass); border-radius: 10px;
+  box-shadow: var(--p-shadow-sm), var(--p-glass-ring);
+}
+.attach-remove {
+  position: absolute; top: -5px; right: -5px; width: 16px; height: 16px; padding: 0; margin: 0;
+  border: none; border-radius: 50%; background: var(--p-fg); color: var(--p-bg);
+  display: grid; place-items: center; cursor: pointer; box-shadow: var(--p-shadow-sm);
+  line-height: 0;
+}
+.attach-remove svg { display: block; }
+/* Custom tooltip (not the native title attribute, which delays ~1s before
+   showing) — fades in immediately on hover so a lead can confirm the right
+   file landed without waiting. */
+.attach-tooltip {
+  position: absolute; bottom: calc(100% + 7px); left: 50%; transform: translateX(-50%);
+  background: var(--p-fg); color: var(--p-bg); font-size: 11px; line-height: 1.3;
+  padding: 4px 8px; border-radius: 7px; white-space: nowrap;
+  max-width: 220px; overflow: hidden; text-overflow: ellipsis;
+  opacity: 0; pointer-events: none; transition: opacity .08s ease;
+  box-shadow: var(--p-shadow-sm);
+}
+.attach-chip:hover .attach-tooltip { opacity: 1; }
+.attach-error { font-size: 12px; color: #b91c1c; padding: 0 4px 6px; }
+
+/* --- attachment chips inside a sent message bubble (same plain icon) --- */
+.msg-attachments { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.msg-attachment-chip {
+  display: grid; place-items: center; width: 28px; height: 28px;
+  border-radius: 8px; background: rgba(255,255,255,.18); color: inherit;
+}
 
 /* --- sub-flow glass card (iteration / checkout / escalation / setup) --- */
 .stage-card {

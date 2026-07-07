@@ -1,5 +1,6 @@
 import { prefixedId } from "../src/lib/id";
 import type { IterationJob } from "../src/transport/types";
+import type { Attachment } from "../src/types/records";
 import { reviseSite } from "./site";
 
 // Stateful iteration jobs: a job reports "processing" for a couple of polls,
@@ -14,11 +15,18 @@ interface JobState {
 
 const jobs = new Map<string, JobState>();
 
-export function createJob(previewId: string, freeText?: string): IterationJob {
+export function createJob(
+  previewId: string,
+  freeText?: string,
+  attachments?: Attachment[],
+): IterationJob {
   const id = prefixedId("itr");
   // Apply the (fake) edit right away — deterministic, so there's no reason to
   // wait — the queued/processing polling below is purely cosmetic pacing.
-  const site = freeText ? reviseSite(previewId, freeText) : undefined;
+  const site =
+    freeText || attachments?.length
+      ? reviseSite(previewId, freeText ?? "", attachments)
+      : undefined;
   const job: IterationJob = { id, status: "queued", version: site?.version };
   jobs.set(id, { job, polls: 0, readyAfter: 2 });
   return { ...job };

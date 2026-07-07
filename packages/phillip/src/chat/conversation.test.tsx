@@ -69,7 +69,7 @@ describe("conversation flow", () => {
     });
 
     const input = await waitFor(() => {
-      const el = shadow.querySelector<HTMLInputElement>(".composer input");
+      const el = shadow.querySelector<HTMLInputElement>('.composer input[aria-label="message"]');
       if (!el) throw new Error("composer not ready");
       return el;
     });

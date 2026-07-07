@@ -19,6 +19,7 @@ interface MockSiteState {
   premium: boolean;
   tagline: string;
   businessName: string;
+  logoDataUrl?: string;
 }
 
 const DEFAULT_SITE: MockSiteState = {
@@ -69,7 +70,13 @@ export function FakeGeneratedSite({
       <style>{CSS}</style>
 
       <header className="nav">
-        <div className="brand">{site.businessName}</div>
+        <div className="brand">
+          {site.logoDataUrl ? (
+            <img src={site.logoDataUrl} alt={site.businessName} className="brand-logo" />
+          ) : (
+            site.businessName
+          )}
+        </div>
         <nav>
           <a href="#menu">menu</a>
           <a href="#gallery">gallery</a>
@@ -165,7 +172,8 @@ const CSS = `
 .nav { position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between;
   align-items: center; padding: 18px 28px; background: rgba(250,250,249,.85);
   backdrop-filter: blur(8px); border-bottom: 1px solid #eee; }
-.nav .brand { font-weight: 800; font-size: 18px; }
+.nav .brand { font-weight: 800; font-size: 18px; display: flex; align-items: center; }
+.brand-logo { height: 28px; width: auto; display: block; }
 .nav nav a { margin-left: 20px; text-decoration: none; font-size: 14px; color: #555; }
 .hero { min-height: 88vh; display: grid; place-items: center; text-align: center;
   background: radial-gradient(120% 120% at 50% 0%, #fff 0%, #ffe9e0 55%, #ffd9e6 100%); padding: 40px; }

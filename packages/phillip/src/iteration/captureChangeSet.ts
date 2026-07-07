@@ -1,4 +1,4 @@
-import type { ChangeItem, ChangeKind, ChangeSet } from "../types/records";
+import type { Attachment, ChangeItem, ChangeKind, ChangeSet } from "../types/records";
 
 // The guided options Phillip offers for an inline tweak. Each maps to a light
 // ChangeKind the Build agent can turn around without a human.
@@ -25,15 +25,23 @@ export const ITERATION_OPTIONS: IterationOption[] = [
 // stops taking free-text edits and hands off manually.
 export const MAX_REVISIONS = 5;
 
-/** Structure the selected guided options + free text into a change-set. */
-export function captureChangeSet(selected: IterationOption[], freeText?: string): ChangeSet {
+/** Structure the selected guided options + free text (+ attachments) into a change-set. */
+export function captureChangeSet(
+  selected: IterationOption[],
+  freeText?: string,
+  attachments?: Attachment[],
+): ChangeSet {
   const items: ChangeItem[] = selected.map((o) => ({
     kind: o.kind,
     target: o.target,
     value: o.value,
   }));
   const ft = freeText?.trim();
-  return { items, freeText: ft ? ft : undefined };
+  return {
+    items,
+    freeText: ft ? ft : undefined,
+    attachments: attachments?.length ? attachments : undefined,
+  };
 }
 
 // The light/heavy boundary. Guided options are always light; only the free-text

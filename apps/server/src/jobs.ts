@@ -21,12 +21,13 @@ export function createJob(
   model: string,
   previewId: string,
   changeRequest: string,
+  attachmentUrls?: string[],
 ): IterationJob {
   const id = prefixedId("itr");
   const job: IterationJob = { id, status: "queued" };
   jobs.set(id, job);
 
-  void reviseSite({ anthropic, model, previewId, changeRequest })
+  void reviseSite({ anthropic, model, previewId, changeRequest, attachmentUrls })
     .then((site) => {
       const current = jobs.get(id);
       if (!current) return;

@@ -43,7 +43,9 @@ export const handlers = [
 
   http.post("*/v1/iterations", async ({ request }) => {
     const body = (await request.json()) as CreateIterationRequest;
-    return HttpResponse.json(createJob(body.previewId, body.changeSet.freeText));
+    return HttpResponse.json(
+      createJob(body.previewId, body.changeSet.freeText, body.changeSet.attachments),
+    );
   }),
 
   http.get("*/v1/iterations/:id", ({ params }) => {

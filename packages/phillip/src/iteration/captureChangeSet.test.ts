@@ -21,6 +21,13 @@ describe("captureChangeSet", () => {
     expect(captureChangeSet([], "  make it pop  ").freeText).toBe("make it pop");
     expect(captureChangeSet([], "   ").freeText).toBeUndefined();
   });
+
+  it("carries attachments and drops an empty list", () => {
+    const logo = { name: "logo.png", mediaType: "image/png", dataUrl: "data:image/png;base64,abc" };
+    expect(captureChangeSet([], "use this as our logo", [logo]).attachments).toEqual([logo]);
+    expect(captureChangeSet([], "no attachment here").attachments).toBeUndefined();
+    expect(captureChangeSet([], "empty list", []).attachments).toBeUndefined();
+  });
 });
 
 describe("isHeavyRequest (light vs heavy boundary)", () => {

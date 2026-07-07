@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { ChangeSet } from "@nutz/phillip";
 import cors from "cors";
 import express from "express";
+import { getAsset, storeAsset } from "./assets";
 import { DEMO_CONTEXT, demoBootConfig } from "./fixtures";
 import { prefixedId } from "./id";
 import { advanceJob, createJob } from "./jobs";
@@ -24,7 +25,9 @@ const anthropic = new Anthropic();
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+// Raised from the 100kb default — attachments arrive as base64 data URLs
+// (client-side downscaled, but base64 still runs ~33% larger than raw bytes).
+app.use(express.json({ limit: "8mb" }));
 
 app.get("/v1/preview/:id/boot", (req, res) => {
   res.json(demoBootConfig(req.params.id));
@@ -52,12 +55,17 @@ app.post("/v1/conversations/:sessionId/messages", async (req, res) => {
 
 app.post("/v1/iterations", (req, res) => {
   const { previewId, changeSet } = req.body as { previewId: string; changeSet: ChangeSet };
-  const changeRequest = changeSet?.freeText?.trim();
-  if (!changeRequest) {
-    res.status(400).json({ error: "changeSet.freeText is required" });
+  const changeRequest = changeSet?.freeText?.trim() ?? "";
+  const attachments = changeSet?.attachments ?? [];
+  if (!changeRequest && attachments.length === 0) {
+    res.status(400).json({ error: "changeSet.freeText or an attachment is required" });
     return;
   }
-  res.json(createJob(anthropic, MODEL, previewId, changeRequest));
+  const attachmentUrls = attachments.map((a) => {
+    const assetId = storeAsset(a.dataUrl);
+    return `${req.protocol}://${req.get("host")}/v1/preview/${encodeURIComponent(previewId)}/assets/${assetId}`;
+  });
+  res.json(createJob(anthropic, MODEL, previewId, changeRequest, attachmentUrls));
 });
 
 app.get("/v1/iterations/:id", (req, res) => {
@@ -71,6 +79,17 @@ app.get("/v1/iterations/:id", (req, res) => {
 
 app.get("/v1/preview/:id/site", (req, res) => {
   res.json(getSite(req.params.id));
+});
+
+app.get("/v1/preview/:id/assets/:assetId", (req, res) => {
+  const asset = getAsset(req.params.assetId);
+  if (!asset) {
+    res.status(404).end();
+    return;
+  }
+  res.setHeader("Content-Type", asset.mediaType);
+  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.send(asset.bytes);
 });
 
 app.post("/v1/escalations", (_req, res) => {
