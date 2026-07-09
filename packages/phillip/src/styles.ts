@@ -200,7 +200,14 @@ export const styles = `
   width: 5px; height: 5px; border-radius: 50%;
   background: #30d158; box-shadow: 0 0 0 3px rgba(48,209,88,.18);
 }
-.nudge-msg { font-size: 13px; line-height: 1.35; color: var(--p-fg); text-wrap: pretty; }
+/* The peek now carries the real opening line, which is longer than the teaser
+   it replaced — and longer still in German. Cap it so the card stays a peek;
+   the full sentence is one tap away. */
+.nudge-msg {
+  font-size: 13px; line-height: 1.35; color: var(--p-fg); text-wrap: pretty;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4;
+  line-clamp: 4; overflow: hidden;
+}
 .nudge-dismiss {
   pointer-events: auto; flex: none;
   width: 22px; height: 22px; margin-top: 3px;

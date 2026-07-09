@@ -1,4 +1,5 @@
 import { type Variants, m, useReducedMotion } from "motion/react";
+import { widgetCopy } from "../i18n";
 import { exitTween, itemVariants, press, spring, staggerChildren } from "../overlay/motion";
 import type { Persona } from "../types/boot";
 import { Dismiss } from "../ui/icons";
@@ -42,6 +43,7 @@ export function Nudge({
   onDismiss: () => void;
 }) {
   const reduce = useReducedMotion() ?? false;
+  const copy = widgetCopy(persona.language);
   return (
     <m.div
       className="nudge"
@@ -54,7 +56,7 @@ export function Nudge({
         type="button"
         className="nudge-card"
         onClick={onOpen}
-        aria-label={`open chat with ${persona.name}`}
+        aria-label={copy.openChat(persona.name)}
         variants={itemVariants(reduce)}
         whileHover={{ y: -2 }}
         whileTap={press}
@@ -65,7 +67,7 @@ export function Nudge({
             <span className="nudge-name">{persona.name}</span>
             <span className="nudge-live">
               <span className="nudge-live-dot" />
-              online
+              {copy.online}
             </span>
           </span>
           <span className="nudge-msg">{message}</span>
@@ -75,7 +77,7 @@ export function Nudge({
         type="button"
         className="nudge-dismiss"
         onClick={onDismiss}
-        aria-label="dismiss"
+        aria-label={copy.dismiss}
         variants={itemVariants(reduce)}
         whileTap={press}
       >

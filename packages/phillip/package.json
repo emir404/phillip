@@ -101,7 +101,7 @@
     {
       "name": "react entry (esm)",
       "path": "dist/index.js",
-      "limit": "61 kB"
+      "limit": "64 kB"
     }
   ],
   "dependencies": {

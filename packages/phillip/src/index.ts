@@ -21,4 +21,5 @@ export {
   quickReplyText,
   reactionQuickReplies,
 } from "./i18n/language";
+export { type WidgetCopy, widgetCopy } from "./i18n/copy";
 export type * from "./types";

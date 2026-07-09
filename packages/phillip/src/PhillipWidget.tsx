@@ -19,6 +19,7 @@ import type { RuntimeConfig } from "./core/config";
 import { useBoot } from "./core/useBoot";
 import type { TaskPhase } from "./elements";
 import { FunnelEmitter } from "./funnel";
+import { defaultGreeting, widgetCopy } from "./i18n";
 import type { Intent, Sentiment } from "./intent/types";
 import { MAX_INLINE_ROUNDS, captureChangeSet, isHeavyRequest, useIteration } from "./iteration";
 import { log } from "./lib/log";
@@ -115,11 +116,10 @@ function Ready({
   const [nudgeShown, setNudgeShown] = useState(false);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const openTriggerRef = useRef<PingReason | "manual">("manual");
-  const openedRef = useRef(false);
 
-  // A specific, human peek — names the person and their business, not "chat
-  // with us". Lowercase, low-pressure, matches Phillip's voice.
-  const peek = `hey, i'm ${config.persona.name.toLowerCase()} 👋 i built this one for ${config.lead.business} — got a sec?`;
+  // Everything Phillip says from the client, in the lead's language.
+  const copy = widgetCopy(config.persona.language);
+  const openedRef = useRef(false);
 
   // Opening the floating conversation — from a ping or the resting bubble.
   const openConversation = (trigger: PingReason | "manual") => {
@@ -141,9 +141,7 @@ function Ready({
   const submitAsk = (text: string, target?: ElementTarget): boolean => {
     const changeSet = captureChangeSet([], text, target);
     if (isHeavyRequest(changeSet) || roundRef.current >= MAX_INLINE_ROUNDS) {
-      convo.appendPhillip(
-        "that's a bigger change and worth doing right. drop your email and my colleague will pick it up.",
-      );
+      convo.appendPhillip(copy.heavyRequest);
       funnel.to("escalated", "heavy_or_round_cap");
       changeFlow("escalation");
       return false;
@@ -197,6 +195,15 @@ function Ready({
     onControl,
   });
 
+  // The peek *is* the opening line, not a second version of it. It used to be
+  // its own English sentence, so a German lead was greeted in German inside the
+  // stage and in English on the bubble beside it. Reading the thread's first
+  // message keeps one copy, already in the lead's language, and it can never
+  // drift from what they see when they open it.
+  const peek =
+    convo.messages[0]?.text ??
+    defaultGreeting(config.persona.name, config.lead.business, config.persona.language);
+
   const iteration = useIteration({
     client,
     previewId: config.preview.id,
@@ -214,24 +221,21 @@ function Ready({
         if (job.resultUrl) setFrameSrc(job.resultUrl);
         return;
       }
-      convo.appendPhillip(
-        "done — tap to see it ✨",
-        job.resultUrl ? { href: job.resultUrl } : undefined,
-      );
+      convo.appendPhillip(copy.iterationDone, job.resultUrl ? { href: job.resultUrl } : undefined);
     },
     onFailed: () => {
       if (flowRef.current === "iteration") {
         setTaskPhase("failed");
         return;
       }
-      convo.appendSystem("hmm, that one didn't take. want to try again?", true);
+      convo.appendSystem(copy.iterationFailed, true);
     },
     onManual: () => {
       if (flowRef.current === "iteration") {
         setTaskPhase("manual");
         return;
       }
-      convo.appendPhillip("i'll take this one by hand — give me a little while.");
+      convo.appendPhillip(copy.iterationManual);
     },
   });
 
@@ -271,10 +275,10 @@ function Ready({
       setEscalating(false);
       if (res.ok) {
         tracker.track("escalated", { email });
-        convo.appendPhillip("sent. look out for a note from phillip@nutz.inc.");
+        convo.appendPhillip(copy.escalationSent);
         changeFlow("chat");
       } else {
-        convo.appendSystem("that email looks off — mind checking it?", true);
+        convo.appendSystem(copy.emailInvalid, true);
       }
     });
   };
@@ -289,16 +293,14 @@ function Ready({
       .then((res) => {
         if (res.checkoutUrl) {
           window.open(res.checkoutUrl, "_blank", "noopener");
-          convo.appendPhillip(
-            "i opened secure checkout in a new tab — i'll get everything live the moment it's done.",
-          );
+          convo.appendPhillip(copy.checkoutOpened);
           changeFlow("chat");
         } else {
-          convo.appendSystem("checkout didn't open — mind trying again?", true);
+          convo.appendSystem(copy.checkoutFailed, true);
         }
       })
       .catch(() => {
-        convo.appendSystem("checkout didn't open — mind trying again?", true);
+        convo.appendSystem(copy.checkoutFailed, true);
       })
       .finally(() => setCheckingOut(false));
   };
@@ -306,7 +308,7 @@ function Ready({
   // Phase 07 — Setup (stub): walk the checklist, then go live.
   const onGoLive = () => {
     funnel.to("live", "setup_complete");
-    convo.appendPhillip("you're live 🎉 i'll email your login.");
+    convo.appendPhillip(copy.live);
     changeFlow("chat");
   };
 
@@ -330,8 +332,8 @@ function Ready({
     if (!runtime.checkoutCancelled || cancelledRef.current) return;
     cancelledRef.current = true;
     setOpen(true);
-    convo.appendPhillip("no stress — i kept everything ready. anything you'd change first?");
-  }, [runtime.checkoutCancelled, convo.appendPhillip]);
+    convo.appendPhillip(copy.checkoutCancelled);
+  }, [runtime.checkoutCancelled, convo.appendPhillip, copy.checkoutCancelled]);
 
   useEffect(() => {
     if (!open || openedRef.current) return;
@@ -396,7 +398,11 @@ function Ready({
           disabled={convo.streaming}
           onPick={(qr) => convo.send({ quickReply: qr })}
         />
-        <Composer disabled={convo.streaming} onSend={(text) => convo.send({ text })} />
+        <Composer
+          disabled={convo.streaming}
+          onSend={(text) => convo.send({ text })}
+          language={config.persona.language}
+        />
       </>
     );
   }

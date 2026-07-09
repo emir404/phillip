@@ -11,7 +11,7 @@ export default defineConfig([
     entry: {
       index: "src/index.ts",
       greeting: "src/intent/greeting.ts",
-      i18n: "src/i18n/language.ts",
+      i18n: "src/i18n/index.ts",
     },
     format: ["esm", "cjs"],
     dts: true,

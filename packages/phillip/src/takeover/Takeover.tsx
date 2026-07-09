@@ -16,6 +16,7 @@ import {
   Task,
   type TaskPhase,
 } from "../elements";
+import { widgetCopy } from "../i18n";
 import type { Message } from "../intent/types";
 import { ITERATION_OPTIONS } from "../iteration";
 import { cn } from "../lib/cn";
@@ -100,6 +101,7 @@ export function Takeover({
   onClose,
 }: TakeoverProps) {
   const reduce = useReducedMotion() ?? false;
+  const copy = widgetCopy(persona.language);
 
   // Rotation and browser-chrome collapse both move the rail's slot.
   const [vp, setVp] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
@@ -289,7 +291,7 @@ export function Takeover({
           {isMobile ? (
             <button
               type="button"
-              aria-label={expanded ? "hide the conversation" : "show the conversation"}
+              aria-label={expanded ? copy.hideConversation : copy.showConversation}
               aria-expanded={expanded}
               onClick={() => setExpanded((e) => !e)}
               className="flex shrink-0 flex-col items-center gap-1 px-4 pt-2.5 pb-1"
@@ -367,9 +369,7 @@ export function Takeover({
             ) : null}
             {pickerOn ? (
               <div className="px-1 text-[11px] text-white/45">
-                {isMobile
-                  ? "tap any part of your site — tap the crosshair again to cancel"
-                  : "click any part of your site — esc cancels"}
+                {isMobile ? copy.pickHintTouch : copy.pickHintMouse}
               </div>
             ) : null}
             <PromptInput
@@ -387,7 +387,7 @@ export function Takeover({
                   </span>
                   <button
                     type="button"
-                    aria-label="clear picked element"
+                    aria-label={copy.clearPicked}
                     onClick={() => setTarget(null)}
                     className="text-brand-300/70 transition hover:text-brand-300"
                   >
@@ -406,7 +406,7 @@ export function Takeover({
                   canPick ? (
                     <button
                       type="button"
-                      aria-label="pick an element"
+                      aria-label={copy.pickElement}
                       aria-pressed={pickerOn}
                       disabled={busy}
                       onClick={() => {

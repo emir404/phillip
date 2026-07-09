@@ -1,17 +1,21 @@
 import { m, useReducedMotion } from "motion/react";
 import { type ChangeEvent, type FormEvent, useState } from "react";
+import { type Language, widgetCopy } from "../i18n";
 import { containerVariants, itemVariants, press, tapTransition } from "../overlay/motion";
 import { SendArrow } from "../ui/icons";
 
 export function Composer({
   disabled,
   onSend,
+  language,
 }: {
   disabled?: boolean;
   onSend: (text: string) => void;
+  language?: Language;
 }) {
   const reduce = useReducedMotion() ?? false;
   const [text, setText] = useState("");
+  const copy = widgetCopy(language);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -34,15 +38,15 @@ export function Composer({
         variants={itemVariants(reduce)}
         value={text}
         onChange={(e: ChangeEvent<HTMLInputElement>) => setText(e.target.value)}
-        placeholder="type a message…"
-        aria-label="message"
+        placeholder={copy.composerPlaceholder}
+        aria-label={copy.composerLabel}
         autoComplete="off"
       />
       <m.button
         type="submit"
         variants={itemVariants(reduce)}
         disabled={disabled || text.trim().length === 0}
-        aria-label="send"
+        aria-label={copy.send}
         whileTap={press}
         transition={tapTransition}
       >

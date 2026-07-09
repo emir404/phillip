@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { Tracker } from "../analytics";
-import { defaultGreeting, reactionQuickReplies } from "../i18n/language";
+import { defaultGreeting, reactionQuickReplies, widgetCopy } from "../i18n";
 import type { Conversation, Intent, Message, QuickReply, Sentiment } from "../intent/types";
 import { prefixedId } from "../lib/id";
 import { log } from "../lib/log";
@@ -157,7 +157,7 @@ export function useConversation(opts: UseConversationOptions): ConversationApi {
       }
     } catch (err) {
       log.warn("stream failed", err);
-      appendSystem("hmm, that didn't go through — tap to try again.", true);
+      appendSystem(widgetCopy(persona.language).streamFailed, true);
     } finally {
       setStreaming(false);
       streamingRef.current = false;
