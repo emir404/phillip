@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
@@ -81,10 +82,14 @@ export function NavUser() {
             align="end"
             sideOffset={6}
           >
-            <DropdownMenuLabel className="truncate">{email ?? "signed in"}</DropdownMenuLabel>
+            {/* Base UI requires GroupLabel to live inside a Menu.Group /
+                Menu.RadioGroup, so each label gets its group wrapper. */}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="truncate">{email ?? "signed in"}</DropdownMenuLabel>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel>Theme</DropdownMenuLabel>
             <DropdownMenuRadioGroup value={theme ?? "system"} onValueChange={setTheme}>
+              <DropdownMenuLabel>Theme</DropdownMenuLabel>
               <DropdownMenuRadioItem value="light">
                 <Sun />
                 Light

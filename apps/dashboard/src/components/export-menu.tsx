@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -34,29 +35,32 @@ export function ExportMenu() {
         <span className="max-sm:hidden">Export</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-52">
-        <DropdownMenuLabel>Agent feed</DropdownMenuLabel>
-        <DropdownMenuItem onClick={copyFeedUrl}>
-          <Copy />
-          Copy feed URL
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={() => window.open("/v1/export", "_blank", "noopener,noreferrer")}
-        >
-          <ArrowSquareOut />
-          Open JSON
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={() => {
-            const a = document.createElement("a");
-            a.href = "/v1/export?format=ndjson";
-            a.download = "phillip-agent-feed.ndjson";
-            a.click();
-          }}
-        >
-          <DownloadSimple />
-          Download NDJSON
-        </DropdownMenuItem>
+        {/* Base UI requires GroupLabel to live inside a Menu.Group. */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Agent feed</DropdownMenuLabel>
+          <DropdownMenuItem onClick={copyFeedUrl}>
+            <Copy />
+            Copy feed URL
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => window.open("/v1/export", "_blank", "noopener,noreferrer")}
+          >
+            <ArrowSquareOut />
+            Open JSON
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => {
+              const a = document.createElement("a");
+              a.href = "/v1/export?format=ndjson";
+              a.download = "phillip-agent-feed.ndjson";
+              a.click();
+            }}
+          >
+            <DownloadSimple />
+            Download NDJSON
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
