@@ -1,6 +1,7 @@
 import { type Root, createRoot } from "react-dom/client";
 import { PhillipWidget } from "./PhillipWidget";
 import { type RuntimeConfig, debugFromLocation, defaultApiBase } from "./core/config";
+import { readAndStripStripeReturn } from "./core/returnParams";
 import { tailwindStyles } from "./elements/tailwind.generated";
 import { setDebug } from "./lib/log";
 import { styles } from "./styles";
@@ -76,6 +77,14 @@ export function mount(opts: MountOptions): () => void {
   if (isInsidePhillipFrame()) {
     return () => {};
   }
+  // Stripe just sent this visitor back. On success the sale is done and the
+  // preview experience ends here — don't wait for the webhook to say so, and
+  // don't flash a chat bubble at a customer who has already paid.
+  const checkout = readAndStripStripeReturn();
+  if (checkout === "paid") {
+    return () => {};
+  }
+
   const debug = Boolean(opts.debug) || debugFromLocation();
   if (debug) setDebug(true);
 
@@ -94,6 +103,7 @@ export function mount(opts: MountOptions): () => void {
     previewId: opts.previewId,
     apiBase: opts.apiBase ?? defaultApiBase(),
     debug,
+    checkoutCancelled: checkout === "cancelled",
   };
   const client = new TransportClient({ apiBase: runtime.apiBase, fetch: opts.fetch });
 

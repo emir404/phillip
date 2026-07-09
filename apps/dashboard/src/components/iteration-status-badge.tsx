@@ -19,14 +19,28 @@ const STATUS_LABEL: Record<IterationRowStatus, string> = {
 };
 
 // Why an iteration needs a human, in plain words.
+const ERROR_LABEL: Record<string, string> = {
+  no_changes: "the edit produced no change",
+  deploy_not_created: "pushed, but Vercel never built it — is the repo connected?",
+  build_timeout: "the build ran too long",
+  build_error: "the build failed",
+  build_canceled: "the build was cancelled",
+  executor_lost: "the run was cut short — retry it",
+};
+
 export function statusReasonLabel(reason: string | null | undefined): string | null {
   if (!reason) return null;
   if (reason === "no_source") return "needs site source";
   if (reason === "budget") return "budget cap reached";
   if (reason === "no_api_key") return "LLM key missing";
+  if (reason === "no_github_token") return "GitHub token missing";
+  if (reason === "no_vercel_project") return "pushed — no Vercel project linked";
+  if (reason === "deploy_skipped") return "deploy skipped";
   if (reason === "handled_manually") return "handled manually";
   if (reason.startsWith("error:")) {
     const detail = reason.slice("error:".length).trim();
+    const known = ERROR_LABEL[detail];
+    if (known) return known;
     return `error: ${detail.length > 60 ? `${detail.slice(0, 60)}…` : detail}`;
   }
   return reason;

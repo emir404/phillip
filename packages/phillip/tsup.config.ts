@@ -6,7 +6,9 @@ import { defineConfig } from "tsup";
 //       pinned to production so React ships its minified runtime.
 export default defineConfig([
   {
-    entry: { index: "src/index.ts" },
+    // `greeting` ships as its own entry so a server can import the shared copy
+    // without pulling in React.
+    entry: { index: "src/index.ts", greeting: "src/intent/greeting.ts" },
     format: ["esm", "cjs"],
     dts: true,
     treeshake: true,

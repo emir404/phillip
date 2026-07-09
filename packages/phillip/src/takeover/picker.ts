@@ -89,6 +89,15 @@ export function attachPicker(doc: Document, handlers: PickerHandlers): () => voi
   doc.documentElement.style.cursor = "crosshair";
 
   let hovered: Element | null = null;
+
+  /** Anything that isn't the page itself, or our own highlight. */
+  const pickable = (el: EventTarget | null): Element | null => {
+    if (!(el instanceof Element)) return null;
+    if (el === box || box.contains(el) || el === doc.documentElement || el === doc.body)
+      return null;
+    return el;
+  };
+
   const place = (el: Element) => {
     const r = el.getBoundingClientRect();
     box.style.display = "block";
@@ -98,11 +107,37 @@ export function attachPicker(doc: Document, handlers: PickerHandlers): () => voi
     box.style.height = `${r.height}px`;
     chip.textContent = el.tagName.toLowerCase() + (el.id ? `#${el.id}` : "");
   };
-  const onMove = (e: MouseEvent) => {
-    const el = e.target instanceof Element ? e.target : null;
-    if (!el || el === box || box.contains(el) || el === doc.documentElement || el === doc.body) {
-      return;
-    }
+
+  /**
+   * A finger has no hover, so a tap gets no highlight before it lands. Leave
+   * the box behind for a beat, detached from the picker's lifetime, so the
+   * lead sees exactly which element they hit.
+   */
+  const flash = (el: Element) => {
+    const r = el.getBoundingClientRect();
+    const ghost = doc.createElement("div");
+    ghost.style.cssText =
+      "position:absolute;z-index:2147483646;pointer-events:none;" +
+      "border:1.5px solid #0088ff;background:rgba(0,136,255,.12);border-radius:3px;" +
+      "box-sizing:border-box;transition:opacity .2s ease";
+    ghost.style.left = `${r.left + (win?.scrollX ?? 0)}px`;
+    ghost.style.top = `${r.top + (win?.scrollY ?? 0)}px`;
+    ghost.style.width = `${r.width}px`;
+    ghost.style.height = `${r.height}px`;
+    doc.body.appendChild(ghost);
+    // `win` is null for a detached document (unit tests) — the global timer
+    // still runs, so the ghost is always cleaned up.
+    const timer = win?.setTimeout ? win.setTimeout.bind(win) : setTimeout;
+    timer(() => {
+      ghost.style.opacity = "0";
+    }, 20);
+    timer(() => ghost.remove(), 260);
+  };
+
+  // Pointer events cover mouse, pen, and the touch that precedes a tap.
+  const onMove = (e: Event) => {
+    const el = pickable(e.target);
+    if (!el) return;
     hovered = el;
     place(el);
   };
@@ -110,7 +145,12 @@ export function attachPicker(doc: Document, handlers: PickerHandlers): () => voi
     // Capture phase + full stop: a pick must never follow the site's links.
     e.preventDefault();
     e.stopImmediatePropagation();
-    if (hovered) handlers.onPick(describe(hovered));
+    // A tap may arrive with no pointermove before it — trust the click's own
+    // target first, and only fall back to whatever the mouse last hovered.
+    const el = pickable(e.target) ?? hovered;
+    if (!el) return;
+    flash(el);
+    handlers.onPick(describe(el));
   };
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") handlers.onCancel();
@@ -123,18 +163,20 @@ export function attachPicker(doc: Document, handlers: PickerHandlers): () => voi
     box.style.display = "none";
   };
 
-  doc.addEventListener("mousemove", onMove, true);
+  doc.addEventListener("pointermove", onMove, true);
   doc.addEventListener("click", onClick, true);
   doc.addEventListener("keydown", onKey, true);
   doc.addEventListener("scroll", onScroll, true);
   doc.documentElement.addEventListener("mouseleave", onLeave);
+  doc.documentElement.addEventListener("pointerleave", onLeave);
 
   return () => {
-    doc.removeEventListener("mousemove", onMove, true);
+    doc.removeEventListener("pointermove", onMove, true);
     doc.removeEventListener("click", onClick, true);
     doc.removeEventListener("keydown", onKey, true);
     doc.removeEventListener("scroll", onScroll, true);
     doc.documentElement.removeEventListener("mouseleave", onLeave);
+    doc.documentElement.removeEventListener("pointerleave", onLeave);
     box.remove();
     doc.documentElement.style.cursor = prevCursor;
   };

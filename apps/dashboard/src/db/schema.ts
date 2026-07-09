@@ -27,6 +27,11 @@ export const leads = sqliteTable("leads", {
   engagementScore: integer("engagement_score").notNull().default(5),
   // The Vercel project the lead's preview site deploys to (iteration executor).
   vercelProjectId: text("vercel_project_id"),
+  // Repo-backed leads: iterations edit source in this GitHub repo, commit, and
+  // let the repo's own Vercel integration build it. Null = the site source
+  // lives in site_files and the executor deploys files directly.
+  repoUrl: text("repo_url"),
+  repoBranch: text("repo_branch"),
   // Per-lead overrides; null = use the global settings.
   budgetCapUsd: real("budget_cap_usd"),
   setupAmountCents: integer("setup_amount_cents"),
@@ -194,7 +199,11 @@ export const usageLedger = sqliteTable(
     leadId: text("lead_id").notNull(),
     kind: text("kind").$type<"chat" | "iteration">().notNull(),
     model: text("model").notNull(),
+    // Uncached input only — the cached prefix bills separately at 1.25x (write)
+    // and 0.1x (read), so all three are kept apart for honest cost math.
     inputTokens: integer("input_tokens").notNull().default(0),
+    cacheCreationTokens: integer("cache_creation_tokens").notNull().default(0),
+    cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
     outputTokens: integer("output_tokens").notNull().default(0),
     costUsd: real("cost_usd").notNull().default(0),
     createdAt: text("created_at").notNull(),

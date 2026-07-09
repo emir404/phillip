@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { deleteVercelProject } from "./executor";
+import { deleteBlockedReason, purgeLead } from "./leads";
 import { createLeadWithPreview } from "./previews";
 import {
   DEFAULT_PERSONA,
@@ -9,7 +9,6 @@ import {
   type PersonaSettings,
   type PricingSettings,
   advanceLeadStage,
-  deleteLead,
   getIteration,
   getLead,
   getLeadRow,
@@ -40,6 +39,8 @@ export interface CreateLeadInput {
   siteUrl?: string;
   /** Raw index.html source; enables automated iterations when present. */
   siteHtml?: string;
+  /** GitHub repo holding the site source — iterations commit and push to it. */
+  repoUrl?: string;
 }
 
 export async function createLeadAction(
@@ -55,6 +56,7 @@ export async function createLeadAction(
       industry: input.industry?.trim() || undefined,
       source: input.source?.trim() || "manual",
       siteUrl: input.siteUrl?.trim() || undefined,
+      repoUrl: input.repoUrl?.trim() || undefined,
       files: input.siteHtml?.trim() ? [{ path: "index.html", content: input.siteHtml }] : undefined,
     });
     revalidatePath("/");
@@ -138,13 +140,10 @@ export async function deleteLeadAction(leadId: string): Promise<ActionResult> {
   try {
     const lead = await getLeadRow(leadId);
     if (!lead) return { ok: false, error: "Lead not found." };
-    if ((lead.stage === "paid" || lead.stage === "live") && !lead.testMode) {
-      return { ok: false, error: "This lead has paid — real customers can't be deleted." };
-    }
-    if (lead.vercelProjectId) {
-      await deleteVercelProject(lead.vercelProjectId).catch(() => false);
-    }
-    await deleteLead(leadId);
+    const blocked = deleteBlockedReason(lead);
+    if (blocked) return { ok: false, error: blocked };
+
+    await purgeLead(lead);
     revalidatePath("/");
     revalidatePath("/leads");
     return { ok: true };

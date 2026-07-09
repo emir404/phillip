@@ -26,26 +26,9 @@ npm i @nutz/phillip   # or pnpm / yarn
 
 `react` and `react-dom` (>=18.2) are peer dependencies.
 
-### React
+### Drop-in (any site)
 
-```tsx
-import { Phillip } from "@nutz/phillip";
-
-export default function Page() {
-  return (
-    <>
-      <GeneratedSite />
-      <Phillip previewId="prv_8f2a" />
-    </>
-  );
-}
-```
-
-`<PreviewAgent>` is exported as a back-compat alias for `<Phillip>`.
-
-### Drop-in (non-React)
-
-The same thing as a single tag — React is bundled into this build:
+One tag, no build step — React is bundled into this entry:
 
 ```html
 <script
@@ -55,8 +38,59 @@ The same thing as a single tag — React is bundled into this build:
 ></script>
 ```
 
-Optional attributes: `data-api-base` (backend origin; defaults to same-origin),
-`data-debug` (verbose console logging).
+| Attribute | Required | Meaning |
+| --- | --- | --- |
+| `data-preview-id` | yes | The preview this page belongs to — the only credential the page carries. |
+| `data-api-base` | no | Backend origin. Defaults to the origin that served the script. |
+| `data-debug` | no | Verbose console logging (`?phillip_debug` in the URL does the same). |
+
+### Next.js (App Router)
+
+```tsx
+// app/layout.tsx
+import Script from "next/script";
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        {children}
+        <Script
+          src="https://your-dashboard.example.com/phillip.js"
+          data-preview-id="prv_8f2a"
+          strategy="afterInteractive"
+        />
+      </body>
+    </html>
+  );
+}
+```
+
+`afterInteractive` is the right strategy: the widget is an overlay, so it must
+not block hydration.
+
+### React
+
+```tsx
+"use client";
+import { Phillip } from "@nutz/phillip";
+
+export function SiteAgent() {
+  return <Phillip previewId="prv_8f2a" />;
+}
+```
+
+The component renders `null` and mounts itself into a shadow root from an
+effect, so it is inert during SSR — but it *is* a client component. There is
+also an imperative `mount({ previewId })` that returns a disposer.
+
+`<PreviewAgent>` is exported as a back-compat alias for `<Phillip>`.
+
+### Once the lead pays
+
+The widget stops mounting: the boot response goes silent for a paid lead, and a
+visitor arriving back from Stripe (`?phillip=paid`) is never shown a chat bubble
+again. Nothing to uninstall.
 
 ---
 
@@ -80,16 +114,21 @@ conversation). Everything downstream is driven by that payload.
   change-set, go to the Build agent, and the preview is swapped. Bigger asks or
   too many rounds hand off.
 
+- **Mobile first** — most leads open their preview on a phone. The chat sizes
+  itself to the viewport and rides above the keyboard; the iteration takeover
+  puts the site full-screen behind a bottom sheet you tap up to talk.
+
 ### What's built vs stubbed
 
-The **core loop is fully implemented**: Landing → Ping → Reaction → Light
-iteration, plus analytics and the funnel (`delivered → opened → engaged → reacted
-→ iterating/escalated → checkout → paid → live`).
+The loop runs end to end: Landing → Ping → Reaction → Light iteration →
+**Checkout** → Paid, plus analytics and the funnel (`delivered → opened →
+engaged → reacted → iterating/escalated → checkout → paid → live`). Checkout is
+real Stripe (hosted Checkout, live and test mode per lead); the funnel only ever
+advances to `paid` on a signed webhook, never from the client.
 
-**Escalation (05), Checkout (06), and Setup (07) are typed stubs** with minimal
-reachable UI — clean interfaces in `src/stubs/` ready to wire to the Email agent,
-real Stripe, and provisioning. (The drop-in checkout simulates success so the
-demo can walk all the way to "live".)
+**Escalation (05) and Setup (07) remain typed stubs** with minimal reachable UI —
+clean interfaces in `src/stubs/` ready to wire to the Email agent and
+provisioning.
 
 ---
 
@@ -140,3 +179,9 @@ src/
 The original spec imports `@nutz/preview` and a `PreviewAgent` component; this
 package ships as **`@nutz/phillip`** with `<Phillip>` as the primary export and
 `PreviewAgent` kept as an alias, so the spec's snippet still works.
+
+---
+
+## License
+
+MIT © nutz

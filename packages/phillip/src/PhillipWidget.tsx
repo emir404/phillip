@@ -324,6 +324,17 @@ function Ready({
     return () => tracker.stop();
   }, [tracker]);
 
+  // Back from an abandoned checkout. Say something human, once, and only in
+  // this session — the transcript on the server shouldn't carry a line the
+  // lead never actually received from a real turn.
+  const cancelledRef = useRef(false);
+  useEffect(() => {
+    if (!runtime.checkoutCancelled || cancelledRef.current) return;
+    cancelledRef.current = true;
+    setOpen(true);
+    convo.appendPhillip("no stress — i kept everything ready. anything you'd change first?");
+  }, [runtime.checkoutCancelled, convo.appendPhillip]);
+
   useEffect(() => {
     if (!open || openedRef.current) return;
     openedRef.current = true;

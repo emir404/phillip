@@ -1,8 +1,16 @@
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { LazyMotion, domAnimation } from "motion/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { Persona } from "../types/boot";
 import { Takeover, type TakeoverProps } from "./Takeover";
+import { SHEET_PEEK_H } from "./morph";
+
+const DESKTOP_W = window.innerWidth;
+
+function setViewport(width: number, height = 844) {
+  Object.defineProperty(window, "innerWidth", { value: width, configurable: true });
+  Object.defineProperty(window, "innerHeight", { value: height, configurable: true });
+}
 
 const persona: Persona = {
   name: "phillip",
@@ -97,5 +105,63 @@ describe("takeover element picker", () => {
     // Still rendered but disabled and disarmed while building.
     expect(toggle?.disabled).toBe(true);
     expect(toggle?.getAttribute("aria-pressed")).toBe("false");
+  });
+});
+
+describe("takeover on a phone", () => {
+  afterEach(() => setViewport(DESKTOP_W, 768));
+
+  it("keeps the site visible and turns the rail into a peeking sheet", () => {
+    setViewport(390);
+    const { container } = renderTakeover();
+
+    const frameWrap = container.querySelector<HTMLElement>(
+      'iframe[name="phillip-preview"]',
+    )?.parentElement;
+    // The site used to be display:none here — the whole point of the redesign.
+    expect(frameWrap?.className).toContain("inset-0");
+    expect(frameWrap?.className).not.toContain("max-md:hidden");
+
+    const handle = container.querySelector<HTMLButtonElement>("[aria-expanded]");
+    if (!handle) throw new Error("no sheet handle");
+    const sheet = handle.closest("div")?.parentElement;
+    expect(sheet?.className).toContain(`h-[${SHEET_PEEK_H}px]`);
+    expect(sheet?.className).toContain("rounded-t-2xl");
+
+    // Close has to be reachable without the rail header.
+    expect(container.querySelectorAll('[aria-label="close editor"]').length).toBe(1);
+  });
+
+  it("expands and collapses the sheet from the handle", () => {
+    setViewport(390);
+    const { container } = renderTakeover();
+    const handle = container.querySelector<HTMLButtonElement>("[aria-expanded]");
+    if (!handle) throw new Error("no sheet handle");
+    const sheet = handle.closest("div")?.parentElement;
+
+    expect(handle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(handle);
+    expect(handle.getAttribute("aria-expanded")).toBe("true");
+    expect(sheet?.className).toContain("h-[70dvh]");
+
+    fireEvent.click(handle);
+    expect(handle.getAttribute("aria-expanded")).toBe("false");
+    expect(sheet?.className).toContain(`h-[${SHEET_PEEK_H}px]`);
+  });
+
+  it("shows build status while the sheet is collapsed", () => {
+    setViewport(390);
+    const { container } = renderTakeover({ taskPhase: "working", busy: true });
+    expect(container.querySelector('[data-phase="working"]')).toBeTruthy();
+  });
+
+  it("keeps the desktop rail beside the framed site", () => {
+    setViewport(1440, 900);
+    const { container } = renderTakeover();
+    const frameWrap = container.querySelector<HTMLElement>(
+      'iframe[name="phillip-preview"]',
+    )?.parentElement;
+    expect(frameWrap?.className).toContain("right-[432px]");
+    expect(container.querySelector("[aria-expanded]")).toBeNull();
   });
 });

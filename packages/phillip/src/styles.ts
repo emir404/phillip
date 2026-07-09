@@ -108,8 +108,8 @@ export const styles = `
    only covers the flash before the avatar loads. */
 .bubble {
   position: fixed;
-  right: 20px;
-  bottom: 20px;
+  right: calc(20px + env(safe-area-inset-right, 0px));
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   z-index: var(--p-z-bubble);
   width: 56px;
   height: 56px;
@@ -168,8 +168,8 @@ export const styles = `
 /* --- resting peek (the speech bubble off Phillip's face) --- */
 .nudge {
   position: fixed;
-  right: 92px;
-  bottom: 22px;
+  right: calc(92px + env(safe-area-inset-right, 0px));
+  bottom: calc(22px + env(safe-area-inset-bottom, 0px));
   z-index: var(--p-z-bubble);
   display: flex;
   align-items: flex-start;
@@ -217,11 +217,14 @@ export const styles = `
 /* --- frameless stage (open) --- */
 .stage {
   position: fixed;
-  right: 32px;
-  bottom: 28px;
+  right: calc(32px + env(safe-area-inset-right, 0px));
+  bottom: calc(28px + env(safe-area-inset-bottom, 0px));
   z-index: var(--p-z-stage);
   width: min(420px, calc(100vw - 40px));
+  /* dvh tracks the shrinking viewport when mobile browser chrome collapses;
+     the vh line above it is the fallback for browsers that lack dvh. */
   max-height: min(78vh, 680px);
+  max-height: min(78dvh, 680px);
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -411,7 +414,8 @@ export const styles = `
 }
 .composer input {
   flex: 1; border: none; background: transparent; outline: none;
-  padding: 6px 0; font-size: 15px; font-family: inherit; color: var(--p-fg);
+  /* 16px exactly: iOS Safari zooms the page when a focused field is smaller. */
+  padding: 6px 0; font-size: 16px; font-family: inherit; color: var(--p-fg);
 }
 .composer input::placeholder { color: var(--p-muted); }
 .composer button {
@@ -445,7 +449,7 @@ export const styles = `
 .iter-chip.selected { background: var(--p-brand-grad); color: #ffffff; border-color: transparent; }
 .iter-text {
   border: 1px solid rgba(0,0,0,.1); border-radius: 14px; padding: 10px 13px;
-  font-size: 14px; font-family: inherit; resize: none; min-height: 60px; outline: none;
+  font-size: 16px; font-family: inherit; resize: none; min-height: 60px; outline: none;
   color: var(--p-fg); background: rgba(255,255,255,.7);
   transition: border-color .14s ease, box-shadow .14s ease;
 }
@@ -487,6 +491,28 @@ export const styles = `
 .setup-steps { display: flex; flex-direction: column; gap: 9px; }
 .setup-step { display: flex; align-items: center; gap: 9px; font-size: 13px; cursor: pointer; }
 .setup-step input { accent-color: var(--p-accent); width: 16px; height: 16px; }
+
+/* Phones: the stage is nearly the whole screen, so it sits closer to the
+   edges, and the peek gets out of the launcher's way. */
+@media (max-width: 480px) {
+  .stage {
+    right: calc(12px + env(safe-area-inset-right, 0px));
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    width: calc(100vw - 24px);
+  }
+  .nudge {
+    right: calc(84px + env(safe-area-inset-right, 0px));
+    max-width: min(300px, calc(100vw - 100px));
+  }
+}
+
+/* Small glyph, thumb-sized target — the hit area grows, the button doesn't. */
+.stage-close, .nudge-dismiss { position: relative; }
+.stage-close::after, .nudge-dismiss::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+}
 
 /* The spinner and the launcher's idle breathe are the only genuine CSS loops;
    motion handles the rest and honors reduced-motion via MotionConfig at the

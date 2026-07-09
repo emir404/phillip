@@ -7,6 +7,7 @@ import {
   advanceLeadStage,
   createIteration,
   getLeadByPreviewId,
+  getLeadRow,
   getSiteFiles,
   spendForLead,
 } from "../../../lib/store";
@@ -45,20 +46,26 @@ export async function POST(req: Request) {
   if (!found) return corsJson({ error: "unknown preview" }, { status: 404 });
   const { lead } = found;
 
-  const [spend, cap, sources] = await Promise.all([
+  const [spend, cap, sources, leadRow] = await Promise.all([
     spendForLead(lead.id),
     budgetCapUsd(lead.budgetCapUsd),
     getSiteFiles(lead.id),
+    getLeadRow(lead.id),
   ]);
+  // A repo IS the site source — such leads carry no site_files rows.
+  const repoUrl = leadRow?.repoUrl ?? null;
 
   let status: "queued" | "queued_manual" = "queued";
   let statusReason: string | undefined;
   if (spend >= cap) {
     status = "queued_manual";
     statusReason = "budget";
-  } else if (sources.length === 0) {
+  } else if (sources.length === 0 && !repoUrl) {
     status = "queued_manual";
     statusReason = "no_source";
+  } else if (repoUrl && !process.env.GITHUB_TOKEN) {
+    status = "queued_manual";
+    statusReason = "no_github_token";
   } else if (!process.env.ANTHROPIC_API_KEY) {
     status = "queued_manual";
     statusReason = "no_api_key";

@@ -239,6 +239,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
         await recordModelUsage(lead.id, "chat", final.model, {
           input_tokens: final.usage.input_tokens,
           output_tokens: final.usage.output_tokens,
+          cache_creation_input_tokens: final.usage.cache_creation_input_tokens,
+          cache_read_input_tokens: final.usage.cache_read_input_tokens,
         });
       } catch (err) {
         console.error("chat stream failed", err);

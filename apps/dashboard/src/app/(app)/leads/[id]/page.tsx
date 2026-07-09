@@ -29,7 +29,7 @@ import { Separator } from "@/components/ui/separator";
 import { money, relativeTime } from "@/lib/analytics";
 import { budgetCapUsd } from "@/lib/anthropic";
 import { agentFeed, attention, sessionMetrics } from "@/lib/metrics";
-import { embedSnippet } from "@/lib/previews";
+import { embedSnippet, nextSnippet } from "@/lib/previews";
 import {
   DEFAULT_PRICING,
   type PricingSettings,
@@ -71,6 +71,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
 
   const host = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host") ?? "localhost"}`;
   const snippet = embedSnippet(host, dl.preview.id);
+  const nextTag = nextSnippet(host, dl.preview.id);
 
   const metrics = sessionMetrics(dl);
   const atn = attention(dl);
@@ -295,6 +296,57 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
               >
                 Raw JSON
               </a>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Install</CardTitle>
+              <CardDescription>Get Phillip onto the preview site</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <SectionLabel>Any site</SectionLabel>
+                <pre className="overflow-x-auto rounded-lg border bg-muted/50 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all">
+                  {snippet}
+                </pre>
+                <div>
+                  <CopyButton text={snippet} label="Copy snippet" toastMessage="Snippet copied" />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Drop it in the <code className="rounded bg-muted px-1 py-0.5">&lt;head&gt;</code>.
+                </p>
+              </div>
+              <Separator />
+              <div className="flex flex-col gap-2">
+                <SectionLabel>Next.js</SectionLabel>
+                <pre className="overflow-x-auto rounded-lg border bg-muted/50 p-3 font-mono text-xs leading-relaxed whitespace-pre">
+                  {nextTag}
+                </pre>
+                <div>
+                  <CopyButton text={nextTag} label="Copy component" toastMessage="Snippet copied" />
+                </div>
+              </div>
+              {leadRow?.repoUrl ? (
+                <>
+                  <Separator />
+                  <div className="flex items-center justify-between gap-3">
+                    <SectionLabel>Repo</SectionLabel>
+                    <a
+                      href={leadRow.repoUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm font-medium underline underline-offset-4"
+                    >
+                      {leadRow.repoUrl.replace("https://github.com/", "")}
+                      {leadRow.repoBranch ? ` · ${leadRow.repoBranch}` : ""}
+                    </a>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Iterations commit here; the repo's Vercel project builds them.
+                  </p>
+                </>
+              ) : null}
             </CardContent>
           </Card>
 

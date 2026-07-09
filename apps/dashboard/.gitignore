@@ -4,3 +4,5 @@ next-env.d.ts
 *.tsbuildinfo
 .vercel
 .env*
+# …but the template documents the env surface and carries no secrets.
+!.env.example

@@ -18,19 +18,39 @@ import { Plus } from "@phosphor-icons/react";
 import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 
-// Mirrors embedSnippet() in src/lib/previews.ts, composed client-side so the
-// host can come from window.location.origin.
+// Mirrors embedSnippet()/nextSnippet() in src/lib/previews.ts, composed
+// client-side so the host can come from window.location.origin.
 const snippetFor = (previewId: string) =>
   `<script src="${window.location.origin}/phillip.js" data-preview-id="${previewId}" defer></script>`;
+
+const nextSnippetFor = (previewId: string) =>
+  [
+    'import Script from "next/script";',
+    "",
+    "// app/layout.tsx — inside <body>, after {children}",
+    "<Script",
+    `  src="${window.location.origin}/phillip.js"`,
+    `  data-preview-id="${previewId}"`,
+    '  strategy="afterInteractive"',
+    "/>",
+  ].join("\n");
+
+interface Created {
+  previewId: string;
+  /** A repo-backed lead is a framework app — show it the Next snippet first. */
+  hasRepo: boolean;
+}
 
 export function NewLeadDialog() {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
-  const [snippet, setSnippet] = useState<string | null>(null);
+  const [created, setCreated] = useState<Created | null>(null);
+  const [tab, setTab] = useState<"html" | "next">("html");
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    const repoUrl = String(fd.get("repoUrl") ?? "");
     setPending(true);
     const res = await createLeadAction({
       business: String(fd.get("business") ?? ""),
@@ -40,13 +60,16 @@ export function NewLeadDialog() {
       source: String(fd.get("source") ?? ""),
       siteUrl: String(fd.get("siteUrl") ?? ""),
       siteHtml: String(fd.get("siteHtml") ?? ""),
+      repoUrl,
     });
     setPending(false);
     if (!res.ok) {
       toast.error(res.error);
       return;
     }
-    setSnippet(snippetFor(res.previewId));
+    const hasRepo = Boolean(repoUrl.trim());
+    setTab(hasRepo ? "next" : "html");
+    setCreated({ previewId: res.previewId, hasRepo });
     toast.success("Lead created — drop the snippet into the preview site.");
   }
 
@@ -55,7 +78,7 @@ export function NewLeadDialog() {
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (!next) setSnippet(null);
+        if (!next) setCreated(null);
       }}
     >
       <DialogTrigger render={<Button size="sm" />}>
@@ -63,30 +86,53 @@ export function NewLeadDialog() {
         New lead
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
-        {snippet ? (
-          <>
-            <DialogHeader>
-              <DialogTitle>Embed snippet</DialogTitle>
-              <DialogDescription>
-                Paste this into the preview site's&nbsp;
-                <code className="rounded bg-muted px-1 py-0.5 text-xs">&lt;head&gt;</code> to start
-                tracking the lead.
-              </DialogDescription>
-            </DialogHeader>
-            <pre className="overflow-x-auto rounded-lg border bg-muted/50 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all">
-              {snippet}
-            </pre>
-            <div className="flex items-center gap-2">
-              <CopyButton text={snippet} label="Copy snippet" toastMessage="Snippet copied" />
-              <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
-                Done
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Iterations run automatically only when site source is attached — otherwise they queue
-              for you.
-            </p>
-          </>
+        {created ? (
+          (() => {
+            const snippet =
+              tab === "next" ? nextSnippetFor(created.previewId) : snippetFor(created.previewId);
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Embed snippet</DialogTitle>
+                  <DialogDescription>
+                    {tab === "next"
+                      ? "Add this to the app's root layout to start tracking the lead."
+                      : "Paste this into the preview site's <head> to start tracking the lead."}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex gap-1 rounded-lg bg-muted/50 p-1">
+                  {(["html", "next"] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setTab(t)}
+                      className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                        tab === t
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {t === "html" ? "HTML" : "Next.js"}
+                    </button>
+                  ))}
+                </div>
+                <pre className="overflow-x-auto rounded-lg border bg-muted/50 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all">
+                  {snippet}
+                </pre>
+                <div className="flex items-center gap-2">
+                  <CopyButton text={snippet} label="Copy snippet" toastMessage="Snippet copied" />
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
+                    Done
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {created.hasRepo
+                    ? "Iterations edit the repo, commit, and let its Vercel build ship the change."
+                    : "Iterations run automatically only when site source is attached — otherwise they queue for you."}
+                </p>
+              </>
+            );
+          })()
         ) : (
           <>
             <DialogHeader>
@@ -125,6 +171,14 @@ export function NewLeadDialog() {
                 <Input id="nl-siteUrl" name="siteUrl" placeholder="https://preview.example.com" />
               </div>
               <div className="grid gap-1.5">
+                <Label htmlFor="nl-repoUrl">GitHub repo</Label>
+                <Input id="nl-repoUrl" name="repoUrl" placeholder="owner/repo or URL" />
+                <p className="text-xs text-muted-foreground">
+                  Repo-backed leads get automated iterations: Phillip edits the source, commits, and
+                  the repo's Vercel project builds it.
+                </p>
+              </div>
+              <div className="grid gap-1.5">
                 <Label htmlFor="nl-siteHtml">Site HTML (optional)</Label>
                 <Textarea
                   id="nl-siteHtml"
@@ -135,8 +189,7 @@ export function NewLeadDialog() {
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Iterations run automatically only when site source is attached — otherwise they
-                queue for you.
+                No repo and no HTML? Iterations queue for you instead of running automatically.
               </p>
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="ghost" onClick={() => setOpen(false)}>

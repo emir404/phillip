@@ -81,6 +81,21 @@ export function Crosshair({ size = 14, ...props }: IconProps) {
   );
 }
 
+// Points the way the sheet will move: up to expand, down to collapse.
+export function Chevron({ size = 14, ...props }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M6 15l6-6 6 6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 // The iMessage bubble tail — a self-contained shape filled with `currentColor`
 // (set to the bubble's color), so it works over any background (no mask trick).
 // Path lifted from the iMessage-simulator. Default orientation hooks to the

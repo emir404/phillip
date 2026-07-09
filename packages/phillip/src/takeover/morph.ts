@@ -22,10 +22,26 @@ export function captureRect(el: HTMLElement | null): Rect | null {
     : null;
 }
 
-/** Mirrors the rail's CSS slot: 16px inset, 400px wide, full-bleed under 768. */
+/** Below this the rail becomes a bottom sheet over a full-bleed site frame. */
+export const MOBILE_BP = 768;
+/** Collapsed sheet: handle + status + composer, nothing else. Matches `h-[224px]`. */
+export const SHEET_PEEK_H = 224;
+/** Expanded sheet: enough transcript to read, enough site to still see it. */
+const SHEET_EXPANDED_RATIO = 0.7;
+
+/**
+ * The sheet's box. Kept here, next to the morph math, because the FLIP target
+ * and the CSS height class must agree to the pixel or the rail lands crooked.
+ */
+export function sheetRect(vw: number, vh: number, expanded: boolean): Rect {
+  const height = expanded ? Math.round(vh * SHEET_EXPANDED_RATIO) : SHEET_PEEK_H;
+  return { left: 0, top: vh - height, width: vw, height };
+}
+
+/** Where the rail comes to rest: a right-hand column, or a peeking sheet. */
 export function railFinalRect(vw = window.innerWidth, vh = window.innerHeight): Rect {
-  const width = vw < 768 ? vw - 32 : 400;
-  return { left: vw - 16 - width, top: 16, width, height: vh - 32 };
+  if (vw < MOBILE_BP) return sheetRect(vw, vh, false);
+  return { left: vw - 16 - 400, top: 16, width: 400, height: vh - 32 };
 }
 
 export interface MorphCustom {

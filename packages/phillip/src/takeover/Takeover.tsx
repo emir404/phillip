@@ -1,5 +1,5 @@
 import { m, useReducedMotion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Avatar } from "../chat/Avatar";
 import {
   Conversation,
@@ -18,11 +18,21 @@ import {
 } from "../elements";
 import type { Message } from "../intent/types";
 import { ITERATION_OPTIONS } from "../iteration";
+import { cn } from "../lib/cn";
+import { useViewportInset } from "../lib/useViewportInset";
 import { exitTween, spring } from "../overlay/motion";
 import type { Persona } from "../types/boot";
 import type { ElementTarget } from "../types/records";
-import { Close, Crosshair, Dismiss } from "../ui/icons";
-import { type MorphCustom, type Rect, railEnter, railExit, railFinalRect } from "./morph";
+import { Chevron, Close, Crosshair, Dismiss } from "../ui/icons";
+import {
+  MOBILE_BP,
+  type MorphCustom,
+  type Rect,
+  railEnter,
+  railExit,
+  railFinalRect,
+  sheetRect,
+} from "./morph";
 import { attachPicker } from "./picker";
 
 // The iteration takeover (Figma 39:70): the lead's site framed live on the
@@ -30,6 +40,10 @@ import { attachPicker } from "./picker";
 // the page itself — when a build lands, swapping `frameSrc` re-keys it and the
 // lead watches their site update in place, Lovable-style. `mount()` refuses to
 // boot inside this frame (name check), so the widget never recurses.
+//
+// On a phone that side-by-side doesn't exist: the site fills the screen and the
+// rail becomes a bottom sheet, peeking with just the composer and the build
+// status, tapping up to show the conversation. Most leads see this one.
 //
 // Children are positioned absolutely (not flex) so the rail's final box is
 // analytic — the stage→rail morph tweens between two known rects without
@@ -86,13 +100,33 @@ export function Takeover({
   onClose,
 }: TakeoverProps) {
   const reduce = useReducedMotion() ?? false;
-  // The rail's destination box, frozen at mount so enter/exit agree on it.
-  const [final] = useState(railFinalRect);
+
+  // Rotation and browser-chrome collapse both move the rail's slot.
+  const [vp, setVp] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
+  useEffect(() => {
+    const onResize = () => setVp({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const isMobile = vp.w < MOBILE_BP;
+  const [expanded, setExpanded] = useState(false);
+
+  // The rail's destination box. `initial` is read once at mount, so recomputing
+  // this on resize only ever re-aims the exit and the sheet's height.
+  const final = useMemo(() => railFinalRect(vp.w, vp.h), [vp.w, vp.h]);
   const railRef = useRef<HTMLDivElement | null>(null);
   // While morphing, the rail's content is pinned to its final width so text
   // never re-wraps mid-flight (the outer clip crops the first frames).
   const [innerW, setInnerW] = useState<number | null>(stageRect && !reduce ? final.width : null);
   const enter = railEnter(stageRect, final, reduce);
+  const morphing = Boolean(stageRect) && !reduce;
+
+  // Peek ⇄ expanded. Motion owns the sheet's height whenever it owns the morph;
+  // under reduced motion the height classes take over and the change is instant.
+  const sheetH = isMobile ? sheetRect(vp.w, vp.h, expanded).height : final.height;
+  const animate = morphing ? { ...enter.animate, height: sheetH } : enter.animate;
+
+  const keyboard = useViewportInset(isMobile);
 
   // --- element picker -------------------------------------------------------
   const frameRef = useRef<HTMLIFrameElement | null>(null);
@@ -135,6 +169,7 @@ export function Takeover({
       },
       onCancel: () => setPickerOn(false),
     });
+
     // Esc must work when focus sits in the rail, not just inside the frame.
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setPickerOn(false);
@@ -157,11 +192,14 @@ export function Takeover({
     };
   }, []);
 
-  // Once the morph lands, hand sizing back to the responsive CSS slot.
+  // Once the morph lands, hand sizing back to the responsive CSS slot. The
+  // sheet keeps its animated height: it is the one box whose resting size the
+  // classes can only approximate (70dvh drifts from 0.7 × innerHeight while
+  // mobile browser chrome collapses), and a stale class would snap it.
   const settle = () => {
     const s = railRef.current?.style;
     s?.removeProperty("width");
-    s?.removeProperty("height");
+    if (!isMobile) s?.removeProperty("height");
     setInnerW(null);
   };
 
@@ -177,10 +215,13 @@ export function Takeover({
       animate="animate"
       exit="exit"
     >
-      {/* The site, live, in a rounded frame — hidden on small screens where
-          the rail takes the whole viewport. */}
+      {/* The site, live. Framed beside the rail on a desktop; behind the sheet,
+          edge to edge, on a phone. */}
       <m.div
-        className="absolute inset-y-4 left-4 right-[432px] overflow-clip rounded-2xl bg-ink-900 max-md:hidden"
+        className={cn(
+          "absolute overflow-clip bg-ink-900",
+          isMobile ? "inset-0" : "inset-y-4 left-4 right-[432px] rounded-2xl",
+        )}
         variants={frameVariants(reduce)}
       >
         <iframe
@@ -196,7 +237,13 @@ export function Takeover({
           }}
         />
         {busy ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-ink-950/40">
+          // Sits in the upper half on mobile so the peeking sheet never hides it.
+          <div
+            className={cn(
+              "absolute inset-x-0 flex justify-center bg-ink-950/40",
+              isMobile ? "top-0 h-[calc(100%-224px)] items-center" : "inset-y-0 items-center",
+            )}
+          >
             <div className="flex items-center gap-2.5 rounded-full bg-ink-900/90 px-4 py-2 text-[13px] text-white/85 shadow-lg">
               <Loader />
               rebuilding…
@@ -205,59 +252,108 @@ export function Takeover({
         ) : null}
       </m.div>
 
+      {/* On a phone the rail has no header, so the close button floats. */}
+      {isMobile ? (
+        <button
+          type="button"
+          aria-label="close editor"
+          onClick={onClose}
+          className="absolute right-4 top-[calc(env(safe-area-inset-top,0px)+12px)] z-10 grid size-9 place-items-center rounded-full bg-ink-900/80 text-white/85 shadow-lg backdrop-blur transition hover:text-white"
+        >
+          <Close size={16} />
+        </button>
+      ) : null}
+
       {/* The rail: same conversation, dark renderer, build status inline. It
           enters by morphing out of the floating stage's box and, on a
           build-less close, glides back to it. */}
       <m.div
         ref={railRef}
-        className="absolute top-4 right-4 bottom-4 w-[400px] overflow-clip rounded-2xl bg-ink-900 shadow-[0px_0px_12px_0px_rgba(0,0,0,0.15)] max-md:left-4 max-md:w-auto"
+        className={cn(
+          "absolute overflow-clip bg-ink-900 shadow-[0px_0px_12px_0px_rgba(0,0,0,0.15)]",
+          isMobile
+            ? cn(
+                "inset-x-0 bottom-0 rounded-t-2xl shadow-[0px_-4px_24px_0px_rgba(0,0,0,0.35)]",
+                expanded ? "h-[70dvh]" : "h-[224px]",
+              )
+            : "top-4 right-4 bottom-4 w-[400px] rounded-2xl",
+        )}
+        style={keyboard ? { bottom: keyboard } : undefined}
         initial={enter.initial}
-        animate={enter.animate}
+        animate={animate}
         variants={{ exit: (c?: MorphCustom) => railExit(c, final) }}
         exit="exit"
         onAnimationComplete={settle}
       >
         <div className="flex h-full flex-col" style={innerW ? { width: innerW } : undefined}>
-          <div className="flex items-center gap-2.5 p-4 pb-2">
-            <Avatar persona={persona} size="xs" />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[13px] font-semibold text-white/90">{persona.name}</div>
-              <div className="truncate text-[11px] text-white/50">{persona.title}</div>
-            </div>
+          {isMobile ? (
             <button
               type="button"
-              aria-label="close editor"
-              onClick={onClose}
-              className="grid size-6 place-items-center rounded-full border border-[#191919] bg-ink-700 text-white/80 shadow-[inset_0px_4px_4px_0px_rgba(0,0,0,0.15)] drop-shadow-[0px_4px_6px_rgba(0,0,0,0.15)] transition hover:text-white"
+              aria-label={expanded ? "hide the conversation" : "show the conversation"}
+              aria-expanded={expanded}
+              onClick={() => setExpanded((e) => !e)}
+              className="flex shrink-0 flex-col items-center gap-1 px-4 pt-2.5 pb-1"
             >
-              <Close size={14} />
+              <span className="h-1 w-9 rounded-full bg-white/25" />
+              <Chevron
+                size={12}
+                className={cn("text-white/35 transition-transform", expanded && "rotate-180")}
+              />
             </button>
-          </div>
+          ) : null}
 
-          <Conversation className="min-h-0 flex-1">
-            <ConversationContent>
-              {messages.map((msg) =>
-                msg.role === "system" ? (
-                  <div key={msg.id} className="self-center text-[11px] text-white/40">
-                    {msg.text}
-                  </div>
-                ) : (
-                  <ElMessage key={msg.id} from={msg.role === "lead" ? "user" : "assistant"}>
-                    <MessageContent dark>{msg.text}</MessageContent>
-                  </ElMessage>
-                ),
-              )}
-              {streaming ? (
-                <div className="flex items-center gap-2 px-1 py-0.5 text-white/50">
-                  <Loader size={12} />
+          {!isMobile || expanded ? (
+            <div className="flex items-center gap-2.5 p-4 pb-2">
+              <Avatar persona={persona} size="xs" />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[13px] font-semibold text-white/90">
+                  {persona.name}
                 </div>
+                <div className="truncate text-[11px] text-white/50">{persona.title}</div>
+              </div>
+              {!isMobile ? (
+                <button
+                  type="button"
+                  aria-label="close editor"
+                  onClick={onClose}
+                  className="grid size-6 place-items-center rounded-full border border-[#191919] bg-ink-700 text-white/80 shadow-[inset_0px_4px_4px_0px_rgba(0,0,0,0.15)] drop-shadow-[0px_4px_6px_rgba(0,0,0,0.15)] transition hover:text-white"
+                >
+                  <Close size={14} />
+                </button>
               ) : null}
-              {taskPhase ? <Task phase={taskPhase} summary={taskSummary} /> : null}
-            </ConversationContent>
-          </Conversation>
+            </div>
+          ) : null}
 
-          <div className="flex flex-col gap-2 p-4 pt-2">
-            {showSuggestions ? (
+          {!isMobile || expanded ? (
+            <Conversation className="min-h-0 flex-1">
+              <ConversationContent>
+                {messages.map((msg) =>
+                  msg.role === "system" ? (
+                    <div key={msg.id} className="self-center text-[11px] text-white/40">
+                      {msg.text}
+                    </div>
+                  ) : (
+                    <ElMessage key={msg.id} from={msg.role === "lead" ? "user" : "assistant"}>
+                      <MessageContent dark>{msg.text}</MessageContent>
+                    </ElMessage>
+                  ),
+                )}
+                {streaming ? (
+                  <div className="flex items-center gap-2 px-1 py-0.5 text-white/50">
+                    <Loader size={12} />
+                  </div>
+                ) : null}
+                {!isMobile && taskPhase ? <Task phase={taskPhase} summary={taskSummary} /> : null}
+              </ConversationContent>
+            </Conversation>
+          ) : null}
+
+          <div className={cn("flex flex-col gap-2 p-4 pt-2", isMobile && !expanded && "mt-auto")}>
+            {/* Collapsed, the sheet still has to answer "is it working?". */}
+            {isMobile && taskPhase ? (
+              <Task phase={taskPhase} summary={expanded ? taskSummary : undefined} />
+            ) : null}
+            {showSuggestions && (!isMobile || expanded) ? (
               <Suggestions>
                 {ITERATION_OPTIONS.map((o) => (
                   <Suggestion
@@ -271,7 +367,9 @@ export function Takeover({
             ) : null}
             {pickerOn ? (
               <div className="px-1 text-[11px] text-white/45">
-                click any part of your site — esc cancels
+                {isMobile
+                  ? "tap any part of your site — tap the crosshair again to cancel"
+                  : "click any part of your site — esc cancels"}
               </div>
             ) : null}
             <PromptInput
@@ -298,7 +396,9 @@ export function Takeover({
                 </div>
               ) : null}
               <PromptInputTextarea
-                autoFocus={!busy}
+                // Focusing on a phone throws the keyboard up over the site the
+                // lead came here to look at.
+                autoFocus={!busy && !isMobile}
                 placeholder={target ? "what should change about this?" : undefined}
               />
               <PromptInputToolbar
@@ -309,7 +409,13 @@ export function Takeover({
                       aria-label="pick an element"
                       aria-pressed={pickerOn}
                       disabled={busy}
-                      onClick={() => setPickerOn((on) => !on)}
+                      onClick={() => {
+                        setPickerOn((on) => {
+                          // Picking means touching the site — get out of its way.
+                          if (!on && isMobile) setExpanded(false);
+                          return !on;
+                        });
+                      }}
                       className={
                         pickerOn
                           ? "grid size-7 place-items-center rounded-full bg-brand-600/20 text-brand-300 transition disabled:opacity-40"

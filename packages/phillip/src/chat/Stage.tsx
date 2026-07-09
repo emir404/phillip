@@ -1,5 +1,6 @@
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import type { ReactNode, Ref } from "react";
+import { useViewportInset } from "../lib/useViewportInset";
 import {
   containerVariants,
   itemVariants,
@@ -43,10 +44,14 @@ export function Stage({
   enterDelay?: number;
 }) {
   const reduce = useReducedMotion() ?? false;
+  // The soft keyboard paints over anything anchored to the bottom of the
+  // viewport. Ride above it — `bottom` is untouched by motion's transforms.
+  const keyboard = useViewportInset();
   return (
     <m.div
       ref={stageRef}
       className="stage"
+      style={keyboard ? { bottom: keyboard + 12 } : undefined}
       // biome-ignore lint/a11y/useSemanticElements: a floating chat surface, not a modal <dialog>
       role="dialog"
       aria-label={`chat with ${persona.name}`}

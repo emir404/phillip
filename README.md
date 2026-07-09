@@ -27,9 +27,16 @@ curl -X POST https://<dashboard-host>/v1/previews \
 # → { previewId, snippet, embedScriptUrl, leadId }
 ```
 
-Attaching `files` (the site source) is what lets lead-requested iterations run automatically —
-Claude edits the files and redeploys them to the lead's Vercel project. Leads registered without
-source still work fully; their iteration requests land in the dashboard queue for the team.
+Either way, give the lead a **site source** so its iteration requests run automatically:
+
+- `repoUrl` (`owner/repo` or a URL) — a Next/Vite app on GitHub. Claude edits the source, commits,
+  and pushes; the repo's own Vercel project builds it.
+- `files` — generated HTML. Claude rewrites the files and deploys them to the lead's preview project.
+
+Leads registered without either still work fully; their iteration requests land in the dashboard
+queue for the team.
+
+Putting the snippet on a site you already have → **[docs/embedding.md](docs/embedding.md)**.
 
 ## Develop
 

@@ -5,6 +5,8 @@ export interface RuntimeConfig {
   previewId: string;
   apiBase: string;
   debug: boolean;
+  /** The lead just backed out of Stripe checkout — greet them accordingly. */
+  checkoutCancelled?: boolean;
 }
 
 /** Same-origin by default; the client appends `/v1`. */

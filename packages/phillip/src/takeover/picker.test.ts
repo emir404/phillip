@@ -78,7 +78,7 @@ describe("attachPicker", () => {
     if (!btn) throw new Error("fixture");
     Object.defineProperty(btn, "getBoundingClientRect", { value: () => rect(10, 20, 100, 40) });
 
-    btn.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }));
+    btn.dispatchEvent(new Event("pointermove", { bubbles: true }));
 
     const box = doc.body.lastElementChild as HTMLElement;
     expect(box.style.display).toBe("block");
@@ -96,7 +96,7 @@ describe("attachPicker", () => {
     const btn = doc.querySelector<HTMLElement>("button");
     if (!btn) throw new Error("fixture");
     Object.defineProperty(btn, "getBoundingClientRect", { value: () => rect(10, 20, 100, 40) });
-    btn.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }));
+    btn.dispatchEvent(new Event("pointermove", { bubbles: true }));
 
     const click = new MouseEvent("click", { bubbles: true, cancelable: true });
     btn.dispatchEvent(click);
@@ -108,6 +108,40 @@ describe("attachPicker", () => {
       text: "book a table",
       section: "hero",
     });
+  });
+
+  // A finger produces no pointermove before the click, so a pick that waited
+  // for a hover would silently do nothing on a phone.
+  it("captures a bare tap that never hovered first", () => {
+    const doc = siteDoc();
+    const { onPick } = arm(doc);
+    const btn = doc.querySelector<HTMLElement>("button");
+    if (!btn) throw new Error("fixture");
+    Object.defineProperty(btn, "getBoundingClientRect", { value: () => rect(10, 20, 100, 40) });
+
+    const tap = new MouseEvent("click", { bubbles: true, cancelable: true });
+    btn.dispatchEvent(tap);
+
+    expect(tap.defaultPrevented).toBe(true);
+    expect(onPick).toHaveBeenCalledWith(
+      expect.objectContaining({ tag: "button", section: "hero" }),
+    );
+  });
+
+  it("flashes the picked element so a touch pick is visible", () => {
+    const doc = siteDoc();
+    arm(doc);
+    const btn = doc.querySelector<HTMLElement>("button");
+    if (!btn) throw new Error("fixture");
+    Object.defineProperty(btn, "getBoundingClientRect", { value: () => rect(10, 20, 100, 40) });
+    const before = doc.body.childElementCount;
+
+    btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+
+    expect(doc.body.childElementCount).toBe(before + 1);
+    const ghost = doc.body.lastElementChild as HTMLElement;
+    expect(ghost.style.left).toBe("10px");
+    expect(ghost.style.height).toBe("40px");
   });
 
   it("cancels on Escape", () => {
@@ -127,7 +161,7 @@ describe("attachPicker", () => {
     expect(doc.body.childElementCount).toBe(before - 1);
     expect(doc.documentElement.style.cursor).toBe("");
     const btn = doc.querySelector<HTMLElement>("button");
-    btn?.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }));
+    btn?.dispatchEvent(new Event("pointermove", { bubbles: true }));
     btn?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     expect(onPick).not.toHaveBeenCalled();
   });

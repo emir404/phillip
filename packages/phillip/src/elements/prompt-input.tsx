@@ -132,7 +132,8 @@ export function PromptInputTextarea({
       onChange={(event) => setValue(event.target.value)}
       onKeyDown={handleKeyDown}
       className={cn(
-        "max-h-32 min-h-[40px] w-full resize-none bg-transparent text-[13px] text-white/90 outline-none placeholder:text-white/75",
+        // 16px on phones or iOS Safari zooms the page on focus; 13px above it.
+        "max-h-32 min-h-[40px] w-full resize-none bg-transparent text-[16px] text-white/90 outline-none placeholder:text-white/75 md:text-[13px]",
         className,
       )}
       {...props}

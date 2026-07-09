@@ -13,7 +13,7 @@ export function anthropic(): Anthropic {
 }
 
 export const CHAT_MODEL = process.env.PHILLIP_CHAT_MODEL ?? "claude-haiku-4-5";
-export const EXECUTOR_MODEL = process.env.PHILLIP_EXECUTOR_MODEL ?? "claude-opus-4-8";
+export const EXECUTOR_MODEL = process.env.PHILLIP_EXECUTOR_MODEL ?? "claude-sonnet-5";
 
 // USD per million tokens (input, output). Unknown models fall back to the most
 // expensive row so the cap errs on the safe side.
@@ -24,19 +24,38 @@ const MODEL_RATES: Record<string, { inPerM: number; outPerM: number }> = {
 };
 const FALLBACK_RATE = { inPerM: 5, outPerM: 25 };
 
-export function costUsd(
-  model: string,
-  usage: { input_tokens: number; output_tokens: number },
-): number {
+// Writing a cached prefix costs 1.25x the input rate; reading it back costs
+// 0.1x. Both are billed separately from `input_tokens`, which counts only the
+// uncached remainder — miss them and the budget cap silently under-charges.
+const CACHE_WRITE_MULTIPLIER = 1.25;
+const CACHE_READ_MULTIPLIER = 0.1;
+
+/** The four token counters Anthropic reports (cache fields absent = uncached). */
+export interface TokenUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_input_tokens?: number | null;
+  cache_read_input_tokens?: number | null;
+}
+
+export function costUsd(model: string, usage: TokenUsage): number {
   const rate = MODEL_RATES[model] ?? FALLBACK_RATE;
-  return (usage.input_tokens * rate.inPerM + usage.output_tokens * rate.outPerM) / 1_000_000;
+  const cacheWrite = usage.cache_creation_input_tokens ?? 0;
+  const cacheRead = usage.cache_read_input_tokens ?? 0;
+  return (
+    (usage.input_tokens * rate.inPerM +
+      cacheWrite * rate.inPerM * CACHE_WRITE_MULTIPLIER +
+      cacheRead * rate.inPerM * CACHE_READ_MULTIPLIER +
+      usage.output_tokens * rate.outPerM) /
+    1_000_000
+  );
 }
 
 export async function recordModelUsage(
   leadId: string,
   kind: "chat" | "iteration",
   model: string,
-  usage: { input_tokens: number; output_tokens: number },
+  usage: TokenUsage,
 ): Promise<void> {
   await recordUsage({
     leadId,
@@ -44,6 +63,8 @@ export async function recordModelUsage(
     model,
     inputTokens: usage.input_tokens,
     outputTokens: usage.output_tokens,
+    cacheCreationTokens: usage.cache_creation_input_tokens ?? 0,
+    cacheReadTokens: usage.cache_read_input_tokens ?? 0,
     costUsd: costUsd(model, usage),
   });
 }

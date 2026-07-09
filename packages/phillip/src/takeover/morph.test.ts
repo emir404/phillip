@@ -1,13 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { captureRect, railEnter, railExit, railFinalRect } from "./morph";
+import { SHEET_PEEK_H, captureRect, railEnter, railExit, railFinalRect, sheetRect } from "./morph";
 
 describe("takeover morph", () => {
   it("computes the desktop rail slot (16px inset, 400 wide)", () => {
     expect(railFinalRect(1440, 900)).toEqual({ left: 1024, top: 16, width: 400, height: 868 });
   });
 
-  it("goes full-bleed under 768", () => {
-    expect(railFinalRect(390, 844)).toEqual({ left: 16, top: 16, width: 358, height: 812 });
+  it("becomes a peeking bottom sheet under 768", () => {
+    expect(railFinalRect(390, 844)).toEqual({ left: 0, top: 620, width: 390, height: 224 });
+  });
+
+  it("sheetRect peeks at SHEET_PEEK_H and expands to 70% of the viewport", () => {
+    expect(sheetRect(390, 844, false)).toEqual({
+      left: 0,
+      top: 844 - SHEET_PEEK_H,
+      width: 390,
+      height: SHEET_PEEK_H,
+    });
+    expect(sheetRect(390, 844, true)).toEqual({ left: 0, top: 253, width: 390, height: 591 });
   });
 
   it("captureRect returns null for unmeasurable elements (jsdom)", () => {

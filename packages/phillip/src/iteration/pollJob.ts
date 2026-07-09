@@ -34,8 +34,10 @@ export async function pollJob(
   id: string,
   opts: PollOptions = {},
 ): Promise<IterationJob> {
-  const interval = opts.intervalMs ?? 1200;
-  const maxAttempts = opts.maxAttempts ?? 30;
+  // A real build — install, compile, deploy — runs for minutes. Poll gently,
+  // and wait about as long as the executor's own serverless ceiling allows.
+  const interval = opts.intervalMs ?? 2500;
+  const maxAttempts = opts.maxAttempts ?? 120;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (opts.signal?.aborted) throw new Error("aborted");

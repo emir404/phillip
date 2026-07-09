@@ -78,7 +78,7 @@ function stageFromEvent(e: AnalyticsEvent): LeadStage | null {
 
 // --- row → wire-shape assembly ------------------------------------------------
 
-type LeadRow = typeof leads.$inferSelect;
+export type LeadRow = typeof leads.$inferSelect;
 type PreviewRow = typeof previews.$inferSelect;
 type SessionRow = typeof visitorSessions.$inferSelect;
 type EventRow = typeof events.$inferSelect;
@@ -723,6 +723,8 @@ export async function recordUsage(input: {
   model: string;
   inputTokens: number;
   outputTokens: number;
+  cacheCreationTokens?: number;
+  cacheReadTokens?: number;
   costUsd: number;
 }) {
   await db.insert(usageLedger).values({ ...input, createdAt: nowIso() });

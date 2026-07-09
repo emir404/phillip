@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createLeadWithPreview, previewResponse } from "../../../lib/previews";
+import { InvalidRepoError, createLeadWithPreview, previewResponse } from "../../../lib/previews";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +13,7 @@ interface CreatePreviewBody {
   siteUrl?: string;
   vercelProjectId?: string;
   files?: { path: string; content: string }[];
+  repoUrl?: string;
 }
 
 // Auto mode: the build agent registers the site it just generated and gets
@@ -37,17 +38,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "files must be [{path, content}]" }, { status: 400 });
   }
 
-  const { leadId, previewId } = await createLeadWithPreview({
-    business: body.business.trim(),
-    contact: body.contact,
-    email: body.email,
-    industry: body.industry,
-    source: body.source ?? "build-agent",
-    siteUrl: body.siteUrl,
-    vercelProjectId: body.vercelProjectId,
-    files: body.files,
-  });
+  let created: { leadId: string; previewId: string };
+  try {
+    created = await createLeadWithPreview({
+      business: body.business.trim(),
+      contact: body.contact,
+      email: body.email,
+      industry: body.industry,
+      source: body.source ?? "build-agent",
+      siteUrl: body.siteUrl,
+      vercelProjectId: body.vercelProjectId,
+      files: body.files,
+      repoUrl: body.repoUrl,
+    });
+  } catch (err) {
+    if (err instanceof InvalidRepoError) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+    throw err;
+  }
 
   const host = new URL(req.url).origin;
-  return NextResponse.json(previewResponse(host, leadId, previewId), { status: 201 });
+  return NextResponse.json(previewResponse(host, created.leadId, created.previewId), {
+    status: 201,
+  });
 }
