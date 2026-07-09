@@ -12,10 +12,14 @@ export type IterationPhase = "idle" | "submitting" | "working" | "done" | "faile
 export interface UseIterationOptions {
   client: TransportClient;
   previewId: string;
+  sessionId?: string;
   tracker: Tracker;
   pollIntervalMs?: number;
+  maxAttempts?: number;
   onReady?: (job: IterationJob) => void;
   onFailed?: () => void;
+  /** The build was handed to a human (`queued_manual`) — not a failure. */
+  onManual?: () => void;
 }
 
 export interface IterationApi {
@@ -47,10 +51,18 @@ export function useIteration(opts: UseIterationOptions): IterationApi {
     });
 
     opts.client
-      .createIteration({ previewId: opts.previewId, changeSet, round: nextRound })
+      .createIteration({
+        previewId: opts.previewId,
+        changeSet,
+        round: nextRound,
+        sessionId: opts.sessionId,
+      })
       .then((job) => {
         setPhase("working");
-        return pollJob(opts.client, job.id, { intervalMs: opts.pollIntervalMs });
+        return pollJob(opts.client, job.id, {
+          intervalMs: opts.pollIntervalMs,
+          maxAttempts: opts.maxAttempts,
+        });
       })
       .then((job) => {
         if (job.status === "done") {
@@ -58,6 +70,11 @@ export function useIteration(opts: UseIterationOptions): IterationApi {
           setPhase("done");
           opts.tracker.track("iteration_ready", { iterationId: job.id, version: job.version });
           opts.onReady?.(job);
+        } else if (job.status === "queued_manual") {
+          // A human took the build over — stand down without treating it as
+          // an error; the colleague follows up over email.
+          setPhase("idle");
+          opts.onManual?.();
         } else {
           setPhase("failed");
           opts.onFailed?.();

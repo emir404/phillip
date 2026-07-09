@@ -4,9 +4,11 @@
 
 import { readScriptConfig } from "./core/config";
 import { log } from "./lib/log";
-import { type MountOptions, mount } from "./mount";
+import { type MountOptions, isInsidePhillipFrame, mount } from "./mount";
 
 function autoMount(): void {
+  // The takeover frames the site in an iframe of itself — never boot in there.
+  if (isInsidePhillipFrame()) return;
   const cfg = readScriptConfig();
   if (!cfg.previewId) {
     log.warn("no data-preview-id on the script tag; not mounting");

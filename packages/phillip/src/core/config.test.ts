@@ -29,4 +29,36 @@ describe("readScriptConfig (drop-in)", () => {
   it("returns empty when there is no script tag", () => {
     expect(readScriptConfig().previewId).toBeUndefined();
   });
+
+  it("derives apiBase from the script src origin when data-api-base is absent", () => {
+    const s = document.createElement("script");
+    s.setAttribute("data-preview-id", "prv_src");
+    s.setAttribute("src", "https://api.nutz.inc/phillip.js?v=2");
+    document.body.appendChild(s);
+    expect(readScriptConfig().apiBase).toBe("https://api.nutz.inc");
+  });
+
+  it("prefers an explicit data-api-base over the script src", () => {
+    const s = document.createElement("script");
+    s.setAttribute("data-preview-id", "prv_both");
+    s.setAttribute("data-api-base", "https://api.test");
+    s.setAttribute("src", "https://cdn.example.com/phillip.js");
+    document.body.appendChild(s);
+    expect(readScriptConfig().apiBase).toBe("https://api.test");
+  });
+
+  it("leaves apiBase undefined when the script has no usable src", () => {
+    const noSrc = document.createElement("script");
+    noSrc.setAttribute("data-preview-id", "prv_nosrc");
+    document.body.appendChild(noSrc);
+    expect(readScriptConfig().apiBase).toBeUndefined();
+    noSrc.remove();
+
+    // A relative src can't name a backend origin — same-origin default applies.
+    const relative = document.createElement("script");
+    relative.setAttribute("data-preview-id", "prv_rel");
+    relative.setAttribute("src", "/phillip.js");
+    document.body.appendChild(relative);
+    expect(readScriptConfig().apiBase).toBeUndefined();
+  });
 });

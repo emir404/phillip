@@ -2,14 +2,14 @@ import type { TransportClient } from "../transport";
 import type { CheckoutResponse } from "../transport/types";
 import type { Offer } from "../types/boot";
 
-// Phase 06 — Close & payment (STUB). Real impl creates a Stripe Checkout
-// Session and either redirects to the hosted page or mounts Embedded Checkout
-// in a LIGHT-DOM portal (never inside our shadow root); the payment webhook is
-// verified before the lead becomes a customer. v0 returns the mock session and
-// the caller simulates success.
+// Phase 06 — Close & payment. The backend creates a Stripe Checkout Session
+// and returns its hosted-page url; the widget opens it in a new tab (never
+// inside our shadow root). The lead only becomes a customer once the payment
+// webhook verifies — the client never flips paid state itself.
 
-export function formatPrice(offer: Offer): string {
-  return (offer.amount / 100).toLocaleString("en-US", {
+/** Format an amount in the offer's currency; defaults to the one-time price. */
+export function formatPrice(offer: Offer, amount: number = offer.amount): string {
+  return (amount / 100).toLocaleString("en-US", {
     style: "currency",
     currency: offer.currency.toUpperCase(),
   });
@@ -19,6 +19,5 @@ export async function openCheckout(
   client: TransportClient,
   sessionId: string,
 ): Promise<CheckoutResponse> {
-  // TODO: real Stripe Checkout Session + webhook verification.
   return client.checkout(sessionId);
 }

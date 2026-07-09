@@ -43,12 +43,18 @@ export function CheckoutPanel({
           ) : (
             <>
               make it live · <span className="tnum">{formatPrice(offer)}</span>
+              {offer.monthlyAmount ? (
+                <span className="tnum">
+                  {" "}
+                  + {formatPrice(offer, offer.monthlyAmount)}/mo hosting
+                </span>
+              ) : null}
             </>
           )}
         </button>
       </m.div>
       <m.div className="iter-note" variants={itemVariants(reduce)}>
-        stripe checkout is stubbed in v0 — this simulates a successful payment.
+        secure checkout via stripe — card details never touch this site.
       </m.div>
     </m.div>
   );

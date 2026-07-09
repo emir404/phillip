@@ -63,6 +63,15 @@ describe("toStreamEvent", () => {
     expect(toStreamEvent({ event: "mystery", data: "{}" })).toBeNull();
   });
 
+  it("preserves the start_iteration hint payload", () => {
+    expect(
+      toStreamEvent({ event: "start_iteration", data: '{"hint":"change the name to Emir\'s"}' }),
+    ).toEqual({
+      type: "start_iteration",
+      data: { hint: "change the name to Emir's" },
+    });
+  });
+
   it("tolerates non-JSON delta payloads", () => {
     expect(toStreamEvent({ event: "delta", data: "plain" })).toEqual({
       type: "delta",

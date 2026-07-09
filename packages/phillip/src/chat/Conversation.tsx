@@ -5,6 +5,7 @@ import type { Message as Msg } from "../intent/types";
 import { staggerChildren } from "../overlay/motion";
 import { Message } from "./Message";
 import { TypingIndicator } from "./TypingIndicator";
+import { useBubbleGradientField } from "./useBubbleGradientField";
 
 // Parent only orchestrates timing; it has no visual change of its own. Children
 // (Message) inherit the "initial"/"animate" variant labels and resolve them
@@ -23,6 +24,7 @@ export function Conversation({ messages, streaming }: { messages: Msg[]; streami
   const { config } = usePhillip();
   const persona = config.persona;
   const endRef = useRef<HTMLDivElement>(null);
+  const convoRef = useRef<HTMLDivElement>(null);
   const last = messages[messages.length - 1];
   const showTyping = streaming && last?.role !== "phillip";
 
@@ -32,8 +34,18 @@ export function Conversation({ messages, streaming }: { messages: Msg[]; streami
     endRef.current?.scrollIntoView?.({ block: "end" });
   }, [messages, showTyping]);
 
+  // Repaint the sent-bubble gradient field whenever the transcript grows or
+  // the typing row appears (both shift bubble positions in the viewport).
+  useBubbleGradientField(convoRef, [messages, showTyping]);
+
   return (
-    <m.div className="convo" variants={listOrchestration} initial="initial" animate="animate">
+    <m.div
+      ref={convoRef}
+      className="convo"
+      variants={listOrchestration}
+      initial="initial"
+      animate="animate"
+    >
       <AnimatePresence initial={false}>
         {messages.map((msg, i) => {
           const next = messages[i + 1];

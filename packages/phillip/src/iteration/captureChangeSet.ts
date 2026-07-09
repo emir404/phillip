@@ -1,4 +1,4 @@
-import type { ChangeItem, ChangeKind, ChangeSet } from "../types/records";
+import type { ChangeItem, ChangeKind, ChangeSet, ElementTarget } from "../types/records";
 
 // The guided options Phillip offers for an inline tweak. Each maps to a light
 // ChangeKind the Build agent can turn around without a human.
@@ -24,15 +24,20 @@ export const ITERATION_OPTIONS: IterationOption[] = [
 // After this many inline rounds without converging, escalate (SPEC.md round cap).
 export const MAX_INLINE_ROUNDS = 3;
 
-/** Structure the selected guided options + free text into a change-set. */
-export function captureChangeSet(selected: IterationOption[], freeText?: string): ChangeSet {
+/** Structure the selected guided options + free text (+ a picked element,
+ *  when the lead pointed at one) into a change-set. */
+export function captureChangeSet(
+  selected: IterationOption[],
+  freeText?: string,
+  target?: ElementTarget,
+): ChangeSet {
   const items: ChangeItem[] = selected.map((o) => ({
     kind: o.kind,
     target: o.target,
     value: o.value,
   }));
   const ft = freeText?.trim();
-  return { items, freeText: ft ? ft : undefined };
+  return { items, freeText: ft ? ft : undefined, target };
 }
 
 // The light/heavy boundary. Guided options are always light; only the free-text

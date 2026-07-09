@@ -19,6 +19,8 @@ export interface Offer {
   priceId: string;
   amount: number;
   currency: string;
+  /** Optional recurring hosting price (cents, same currency as `amount`). */
+  monthlyAmount?: number;
   includes: string[];
 }
 

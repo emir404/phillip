@@ -1,89 +1,49 @@
-import fs from "node:fs";
-import path from "node:path";
-import type { AnalyticsEvent, Lead, LeadStage, Message, Preview, Session } from "@nutz/phillip";
+import type {
+  AnalyticsEvent,
+  ChangeSet,
+  Conversation,
+  DeviceContext,
+  GeoContext,
+  Intent,
+  Lead,
+  LeadStage,
+  Message,
+  Order,
+  Preview,
+  QuickReply,
+  Sentiment,
+  Session,
+} from "@nutz/phillip";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import { db } from "../db/client";
+import {
+  events,
+  type IterationRowStatus,
+  conversations,
+  escalations,
+  iterations,
+  leads,
+  messages,
+  orders,
+  previews,
+  settings,
+  siteFiles,
+  usageLedger,
+  visitorSessions,
+} from "../db/schema";
 import { FUNNEL_ORDER } from "./analytics";
-import { sampleLeads } from "./seed-data";
 import type { DashboardLead } from "./types";
 
-// A deliberately small, swappable persistence layer. It keeps the whole dataset
-// in memory (fast reads for the dashboard) and write-through-persists it to a
-// JSON file so a plain `next start` / container deploy survives restarts. If the
-// filesystem isn't writable (e.g. a read-only serverless runtime) it degrades
-// to memory-only — the API still works, it just won't persist across cold
-// starts. Swapping this module for Postgres/Prisma is the one seam to change.
+// The persistence seam, now on Turso/libsql via Drizzle. Rows re-assemble into
+// the exact `DashboardLead` composite the analytics layer (metrics.ts,
+// analytics.ts) consumes, so everything downstream of this file is unchanged
+// from the JSON-store era — same functions, now async.
 
-interface StoreState {
-  byLead: Map<string, DashboardLead>;
-  sessionIndex: Map<string, string>; // sessionId -> leadId
-  file: string | null; // null => memory-only
-}
+const nowIso = () => new Date().toISOString();
 
-const GLOBAL_KEY = "__phillip_store__";
-
-function dataFile(): string {
-  return process.env.PHILLIP_DATA_FILE ?? path.join(process.cwd(), ".data", "phillip.json");
-}
-
-function tryWritable(file: string): boolean {
-  try {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.accessSync(path.dirname(file), fs.constants.W_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function indexSessions(byLead: Map<string, DashboardLead>): Map<string, string> {
-  const idx = new Map<string, string>();
-  for (const dl of byLead.values()) idx.set(dl.session.id, dl.lead.id);
-  return idx;
-}
-
-function load(): StoreState {
-  const file = dataFile();
-  // Prefer an existing file; else fall back through /tmp; else memory.
-  const candidates = [file, path.join("/tmp", "phillip.json")];
-
-  for (const f of candidates) {
-    try {
-      if (fs.existsSync(f)) {
-        const raw = JSON.parse(fs.readFileSync(f, "utf8")) as DashboardLead[];
-        const byLead = new Map(raw.map((dl) => [dl.lead.id, dl] as const));
-        return { byLead, sessionIndex: indexSessions(byLead), file: tryWritable(f) ? f : null };
-      }
-    } catch {
-      // corrupt/unreadable — ignore and keep looking.
-    }
-  }
-
-  // Fresh start: seed so a new deploy shows real data immediately.
-  const seeded = new Map(sampleLeads.map((dl) => [dl.lead.id, structuredClone(dl)] as const));
-  const target = tryWritable(file)
-    ? file
-    : tryWritable(path.join("/tmp", "phillip.json"))
-      ? path.join("/tmp", "phillip.json")
-      : null;
-  const state: StoreState = { byLead: seeded, sessionIndex: indexSessions(seeded), file: target };
-  persist(state);
-  return state;
-}
-
-function persist(state: StoreState): void {
-  if (!state.file) return;
-  try {
-    fs.writeFileSync(state.file, JSON.stringify([...state.byLead.values()], null, 2));
-  } catch {
-    // If a write fails mid-flight, drop to memory-only rather than throwing.
-    state.file = null;
-  }
-}
-
-function store(): StoreState {
-  const g = globalThis as unknown as Record<string, StoreState | undefined>;
-  if (!g[GLOBAL_KEY]) g[GLOBAL_KEY] = load();
-  return g[GLOBAL_KEY] as StoreState;
-}
+// Drizzle returns null for empty columns; the wire types use optional fields.
+const orUndef = <T>(v: T | null): T | undefined => v ?? undefined;
 
 // --- stage / score helpers --------------------------------------------------
 
@@ -116,16 +76,219 @@ function stageFromEvent(e: AnalyticsEvent): LeadStage | null {
   }
 }
 
-// --- public API -------------------------------------------------------------
+// --- row → wire-shape assembly ------------------------------------------------
 
-export function getLeads(): DashboardLead[] {
-  return [...store().byLead.values()].sort(
+type LeadRow = typeof leads.$inferSelect;
+type PreviewRow = typeof previews.$inferSelect;
+type SessionRow = typeof visitorSessions.$inferSelect;
+type EventRow = typeof events.$inferSelect;
+type ConversationRow = typeof conversations.$inferSelect;
+type MessageRow = typeof messages.$inferSelect;
+type OrderRow = typeof orders.$inferSelect;
+
+const defaultDevice = (): DeviceContext => ({
+  type: "desktop",
+  os: "unknown",
+  browser: "unknown",
+  viewport: { width: 0, height: 0 },
+});
+
+function toLead(r: LeadRow): Lead {
+  return {
+    id: r.id,
+    business: r.business,
+    contact: orUndef(r.contact),
+    industry: orUndef(r.industry),
+    email: orUndef(r.email),
+    source: r.source,
+    stage: r.stage,
+  };
+}
+
+function toPreview(r: PreviewRow): Preview {
+  return { id: r.id, leadId: r.leadId, url: r.url, version: r.version, status: r.status };
+}
+
+function toSession(r: SessionRow): Session {
+  return {
+    id: r.id,
+    previewId: r.previewId,
+    device: r.device ?? defaultDevice(),
+    geo: orUndef(r.geo as GeoContext | null),
+    referrer: orUndef(r.referrer),
+    startedAt: r.startedAt,
+    lastSeen: r.lastSeen,
+    returning: r.returning,
+  };
+}
+
+function toEvent(r: EventRow): AnalyticsEvent {
+  return {
+    id: r.id,
+    sessionId: r.sessionId,
+    type: r.type as AnalyticsEvent["type"],
+    payload: r.payload as AnalyticsEvent["payload"],
+    ts: r.ts,
+  };
+}
+
+function toMessage(r: MessageRow): Message {
+  return {
+    id: r.id,
+    role: r.role,
+    text: r.text,
+    ts: r.ts,
+    intent: orUndef(r.intent),
+    sentiment: orUndef(r.sentiment),
+  };
+}
+
+function toConversation(c: ConversationRow, msgs: MessageRow[]): Conversation {
+  return {
+    id: c.id,
+    sessionId: c.sessionId,
+    channel: c.channel,
+    messages: msgs.map(toMessage),
+    intent: orUndef(c.intent),
+    sentiment: orUndef(c.sentiment),
+  };
+}
+
+function toOrder(r: OrderRow): Order {
+  return {
+    id: r.id,
+    leadId: r.leadId,
+    stripeId: orUndef(r.stripeSessionId),
+    amount: r.amountTotal,
+    currency: r.currency,
+    status: r.status,
+  };
+}
+
+// A lead registered before anyone opened its preview has no visitor session
+// yet; synthesize a placeholder so DashboardLead.session is always present.
+function placeholderSession(lead: LeadRow, previewId: string): Session {
+  return {
+    id: `ses_pending_${lead.id}`,
+    previewId,
+    device: defaultDevice(),
+    startedAt: lead.createdAt,
+    lastSeen: lead.updatedAt,
+    returning: false,
+  };
+}
+
+function assemble(
+  lead: LeadRow,
+  preview: PreviewRow | undefined,
+  sessionRows: SessionRow[],
+  eventRows: EventRow[],
+  conversationRow: ConversationRow | undefined,
+  messageRows: MessageRow[],
+  orderRow: OrderRow | undefined,
+): DashboardLead {
+  const previewShape: Preview = preview
+    ? toPreview(preview)
+    : { id: `prv_${lead.id}`, leadId: lead.id, url: "", version: 1, status: "draft" };
+  const latestSession = sessionRows
+    .slice()
+    .sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime())[0];
+  const conversation =
+    conversationRow && messageRows.length > 0
+      ? toConversation(conversationRow, messageRows)
+      : conversationRow
+        ? toConversation(conversationRow, [])
+        : undefined;
+  return {
+    lead: toLead(lead),
+    preview: previewShape,
+    session: latestSession ? toSession(latestSession) : placeholderSession(lead, previewShape.id),
+    engagementScore: lead.engagementScore,
+    events: eventRows
+      .map(toEvent)
+      .sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime()),
+    conversation,
+    order: orderRow ? toOrder(orderRow) : undefined,
+  };
+}
+
+// Load every table once and group in memory. At funnel scale (hundreds of
+// leads, not millions) this beats N+1 querying and keeps assembly obvious; a
+// summary endpoint is the v1.1 optimization if polling cost ever bites.
+async function loadComposites(leadId?: string): Promise<DashboardLead[]> {
+  const [leadRows, previewRows, sessionRows, eventRows, convRows, orderRows] = await Promise.all([
+    leadId ? db.select().from(leads).where(eq(leads.id, leadId)) : db.select().from(leads),
+    leadId
+      ? db.select().from(previews).where(eq(previews.leadId, leadId))
+      : db.select().from(previews),
+    leadId
+      ? db.select().from(visitorSessions).where(eq(visitorSessions.leadId, leadId))
+      : db.select().from(visitorSessions),
+    leadId ? db.select().from(events).where(eq(events.leadId, leadId)) : db.select().from(events),
+    leadId
+      ? db.select().from(conversations).where(eq(conversations.leadId, leadId))
+      : db.select().from(conversations),
+    leadId ? db.select().from(orders).where(eq(orders.leadId, leadId)) : db.select().from(orders),
+  ]);
+
+  const convIds = convRows.map((c) => c.id);
+  const messageRows = convIds.length
+    ? await db
+        .select()
+        .from(messages)
+        .where(inArray(messages.conversationId, convIds))
+        .orderBy(messages.ts)
+    : [];
+
+  const byLead = {
+    previews: groupBy(previewRows, (r) => r.leadId),
+    sessions: groupBy(sessionRows, (r) => r.leadId),
+    events: groupBy(eventRows, (r) => r.leadId),
+    conversations: new Map(convRows.map((c) => [c.leadId, c] as const)),
+    orders: groupBy(orderRows, (r) => r.leadId),
+    messages: groupBy(messageRows, (r) => r.conversationId),
+  };
+
+  return leadRows.map((lead) => {
+    const conv = byLead.conversations.get(lead.id);
+    const leadOrders = (byLead.orders.get(lead.id) ?? [])
+      .slice()
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return assemble(
+      lead,
+      (byLead.previews.get(lead.id) ?? [])[0],
+      byLead.sessions.get(lead.id) ?? [],
+      byLead.events.get(lead.id) ?? [],
+      conv,
+      conv ? (byLead.messages.get(conv.id) ?? []) : [],
+      leadOrders[0],
+    );
+  });
+}
+
+function groupBy<T, K>(rows: T[], key: (r: T) => K): Map<K, T[]> {
+  const m = new Map<K, T[]>();
+  for (const r of rows) {
+    const k = key(r);
+    const list = m.get(k);
+    if (list) list.push(r);
+    else m.set(k, [r]);
+  }
+  return m;
+}
+
+// --- public API (the seam) ----------------------------------------------------
+
+export async function getLeads(): Promise<DashboardLead[]> {
+  const all = await loadComposites();
+  return all.sort(
     (a, b) => new Date(b.session.lastSeen).getTime() - new Date(a.session.lastSeen).getTime(),
   );
 }
 
-export function getLead(id: string): DashboardLead | undefined {
-  return store().byLead.get(id);
+export async function getLead(id: string): Promise<DashboardLead | undefined> {
+  const [dl] = await loadComposites(id);
+  return dl;
 }
 
 export interface LeadUpsert {
@@ -151,91 +314,128 @@ export interface LeadUpsert {
   engagementScore?: number;
 }
 
-const defaultDevice = (): Session["device"] => ({
-  type: "desktop",
-  os: "unknown",
-  browser: "unknown",
-  viewport: { width: 0, height: 0 },
-});
+export async function upsertLead(input: LeadUpsert): Promise<DashboardLead> {
+  const now = nowIso();
+  const [existingLead] = await db.select().from(leads).where(eq(leads.id, input.lead.id));
+  const [existingPreview] = existingLead
+    ? await db.select().from(previews).where(eq(previews.leadId, input.lead.id))
+    : [];
 
-export function upsertLead(input: LeadUpsert): DashboardLead {
-  const s = store();
-  const existing = s.byLead.get(input.lead.id);
-  const nowIso = new Date().toISOString();
-
-  const lead: Lead = {
-    id: input.lead.id,
+  const leadValues = {
     business: input.lead.business,
-    contact: input.lead.contact ?? existing?.lead.contact,
-    industry: input.lead.industry ?? existing?.lead.industry,
-    email: input.lead.email ?? existing?.lead.email,
-    source: input.lead.source ?? existing?.lead.source ?? "unknown",
-    stage: input.lead.stage ?? existing?.lead.stage ?? "delivered",
+    contact: input.lead.contact ?? existingLead?.contact ?? null,
+    industry: input.lead.industry ?? existingLead?.industry ?? null,
+    email: input.lead.email ?? existingLead?.email ?? null,
+    source: input.lead.source ?? existingLead?.source ?? "unknown",
+    stage: input.lead.stage ?? existingLead?.stage ?? ("delivered" as LeadStage),
+    engagementScore: input.engagementScore ?? existingLead?.engagementScore ?? 5,
+    updatedAt: now,
   };
+  if (existingLead) {
+    await db.update(leads).set(leadValues).where(eq(leads.id, input.lead.id));
+  } else {
+    await db.insert(leads).values({ id: input.lead.id, createdAt: now, ...leadValues });
+  }
 
   const previewId =
-    input.preview?.id ?? input.session.previewId ?? existing?.preview.id ?? `prv_${lead.id}`;
-  const preview: Preview = {
-    id: previewId,
-    leadId: lead.id,
-    url: input.preview?.url ?? existing?.preview.url ?? "",
-    version: input.preview?.version ?? existing?.preview.version ?? 1,
-    status: input.preview?.status ?? existing?.preview.status ?? "draft",
-  };
+    input.preview?.id ?? input.session.previewId ?? existingPreview?.id ?? `prv_${input.lead.id}`;
+  await db
+    .insert(previews)
+    .values({
+      id: previewId,
+      leadId: input.lead.id,
+      url: input.preview?.url ?? existingPreview?.url ?? "",
+      version: input.preview?.version ?? existingPreview?.version ?? 1,
+      status: input.preview?.status ?? existingPreview?.status ?? "draft",
+    })
+    .onConflictDoUpdate({
+      target: previews.id,
+      set: {
+        url: input.preview?.url ?? existingPreview?.url ?? "",
+        version: input.preview?.version ?? existingPreview?.version ?? 1,
+        status: input.preview?.status ?? existingPreview?.status ?? "draft",
+      },
+    });
 
-  const session: Session = {
-    id: input.session.id,
-    previewId,
-    device: input.session.device ?? existing?.session.device ?? defaultDevice(),
-    geo: input.session.geo ?? existing?.session.geo,
-    referrer: input.session.referrer ?? existing?.session.referrer,
-    startedAt: input.session.startedAt ?? existing?.session.startedAt ?? nowIso,
-    lastSeen: nowIso,
-    returning: input.session.returning ?? existing?.session.returning ?? false,
-  };
+  const [existingSession] = await db
+    .select()
+    .from(visitorSessions)
+    .where(eq(visitorSessions.id, input.session.id));
+  await db
+    .insert(visitorSessions)
+    .values({
+      id: input.session.id,
+      previewId,
+      leadId: input.lead.id,
+      device: input.session.device ?? existingSession?.device ?? defaultDevice(),
+      geo: input.session.geo ?? existingSession?.geo ?? null,
+      referrer: input.session.referrer ?? existingSession?.referrer ?? null,
+      startedAt: input.session.startedAt ?? existingSession?.startedAt ?? now,
+      lastSeen: now,
+      returning: input.session.returning ?? existingSession?.returning ?? false,
+    })
+    .onConflictDoUpdate({
+      target: visitorSessions.id,
+      set: { lastSeen: now, previewId },
+    });
 
-  const dl: DashboardLead = {
-    lead,
-    preview,
-    session,
-    engagementScore: input.engagementScore ?? existing?.engagementScore ?? 5,
-    events: existing?.events ?? [],
-    conversation: existing?.conversation,
-    order: existing?.order,
-  };
-
-  s.byLead.set(lead.id, dl);
-  s.sessionIndex.set(session.id, lead.id);
-  persist(s);
+  const dl = await getLead(input.lead.id);
+  if (!dl) throw new Error(`upsertLead: lead ${input.lead.id} vanished mid-write`);
   return dl;
 }
 
 // Create a bare lead when analytics arrive before a lead was registered, so no
 // signal is ever dropped.
-function ensureBySession(sessionId: string): DashboardLead {
-  const s = store();
-  const leadId = s.sessionIndex.get(sessionId);
-  const found = leadId ? s.byLead.get(leadId) : undefined;
-  if (found) return found;
-  return upsertLead({
+async function ensureBySession(
+  sessionId: string,
+): Promise<{ leadId: string; sessionRow: typeof visitorSessions.$inferSelect }> {
+  const [sessionRow] = await db
+    .select()
+    .from(visitorSessions)
+    .where(eq(visitorSessions.id, sessionId));
+  if (sessionRow) return { leadId: sessionRow.leadId, sessionRow };
+  await upsertLead({
     lead: { id: `lead_${sessionId}`, business: "Unknown lead", stage: "opened" },
     session: { id: sessionId },
   });
+  const [created] = await db
+    .select()
+    .from(visitorSessions)
+    .where(eq(visitorSessions.id, sessionId));
+  return { leadId: created.leadId, sessionRow: created };
 }
 
-export function saveEvents(sessionId: string, events: AnalyticsEvent[]): DashboardLead {
-  const s = store();
-  const dl = ensureBySession(sessionId);
-  const seen = new Set(dl.events.map((e) => e.id));
+export async function saveEvents(
+  sessionId: string,
+  incoming: AnalyticsEvent[],
+): Promise<DashboardLead> {
+  const { leadId, sessionRow } = await ensureBySession(sessionId);
+  const [leadRow] = await db.select().from(leads).where(eq(leads.id, leadId));
 
-  let stage = dl.lead.stage;
-  let score = dl.engagementScore;
-  let lastTs = dl.session.lastSeen;
-
-  for (const e of events) {
-    if (!e.id || seen.has(e.id)) continue;
+  const withIds = incoming.filter((e) => e.id);
+  const existing = withIds.length
+    ? await db
+        .select({ id: events.id })
+        .from(events)
+        .where(
+          inArray(
+            events.id,
+            withIds.map((e) => e.id),
+          ),
+        )
+    : [];
+  const seen = new Set(existing.map((r) => r.id));
+  const fresh: AnalyticsEvent[] = [];
+  for (const e of withIds) {
+    if (seen.has(e.id)) continue;
     seen.add(e.id);
-    dl.events.push(e);
+    fresh.push(e);
+  }
+
+  let stage = leadRow.stage;
+  let score = leadRow.engagementScore;
+  let lastTs = sessionRow.lastSeen;
+  for (const e of fresh) {
     const implied = stageFromEvent(e);
     if (implied) stage = advanceStage(stage, implied);
     const p = e.payload as Record<string, unknown>;
@@ -243,38 +443,515 @@ export function saveEvents(sessionId: string, events: AnalyticsEvent[]): Dashboa
     if (e.ts && new Date(e.ts).getTime() > new Date(lastTs).getTime()) lastTs = e.ts;
   }
 
-  dl.events.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
-  dl.lead.stage = stage;
-  dl.engagementScore = Math.min(100, score);
-  dl.session.lastSeen = lastTs;
-  persist(s);
+  if (fresh.length) {
+    await db
+      .insert(events)
+      .values(
+        fresh.map((e) => ({
+          id: e.id,
+          sessionId,
+          leadId,
+          type: e.type,
+          payload: e.payload,
+          ts: e.ts,
+        })),
+      )
+      .onConflictDoNothing();
+  }
+  await db
+    .update(leads)
+    .set({ stage, engagementScore: Math.min(100, score), updatedAt: nowIso() })
+    .where(eq(leads.id, leadId));
+  await db
+    .update(visitorSessions)
+    .set({ lastSeen: lastTs })
+    .where(eq(visitorSessions.id, sessionId));
+
+  const dl = await getLead(leadId);
+  if (!dl) throw new Error(`saveEvents: lead ${leadId} vanished mid-write`);
   return dl;
 }
 
-export function appendMessages(
+export async function appendMessages(
   sessionId: string,
-  messages: Message[],
+  incoming: Message[],
   meta?: { intent?: string; sentiment?: string },
-): DashboardLead {
-  const s = store();
-  const dl = ensureBySession(sessionId);
-  if (!dl.conversation) {
-    dl.conversation = { id: `conv_${sessionId}`, sessionId, channel: "web", messages: [] };
+): Promise<DashboardLead> {
+  const { leadId, sessionRow } = await ensureBySession(sessionId);
+
+  let [conv] = await db.select().from(conversations).where(eq(conversations.leadId, leadId));
+  if (!conv) {
+    const created = {
+      id: `conv_${sessionId}`,
+      leadId,
+      sessionId,
+      channel: "web" as const,
+      intent: null,
+      sentiment: null,
+      lastQuickReplies: null,
+    };
+    await db.insert(conversations).values(created).onConflictDoNothing();
+    [conv] = await db.select().from(conversations).where(eq(conversations.leadId, leadId));
+  } else if (conv.sessionId !== sessionId) {
+    // The thread follows the lead; point it at the most recent session.
+    await db.update(conversations).set({ sessionId }).where(eq(conversations.id, conv.id));
   }
-  const seen = new Set(dl.conversation.messages.map((m) => m.id));
-  for (const m of messages) {
-    if (!m.id || seen.has(m.id)) continue;
-    seen.add(m.id);
-    dl.conversation.messages.push(m);
-    if (m.ts && new Date(m.ts).getTime() > new Date(dl.session.lastSeen).getTime()) {
-      dl.session.lastSeen = m.ts;
-    }
+
+  const withIds = incoming.filter((m) => m.id);
+  const existing = withIds.length
+    ? await db
+        .select({ id: messages.id })
+        .from(messages)
+        .where(
+          inArray(
+            messages.id,
+            withIds.map((m) => m.id),
+          ),
+        )
+    : [];
+  const seen = new Set(existing.map((r) => r.id));
+  const fresh = withIds.filter((m) => !seen.has(m.id));
+
+  if (fresh.length) {
+    await db
+      .insert(messages)
+      .values(
+        fresh.map((m) => ({
+          id: m.id,
+          conversationId: conv.id,
+          role: m.role,
+          text: m.text,
+          intent: m.intent ?? null,
+          sentiment: m.sentiment ?? null,
+          ts: m.ts,
+        })),
+      )
+      .onConflictDoNothing();
   }
-  if (meta?.intent) dl.conversation.intent = meta.intent as typeof dl.conversation.intent;
-  if (meta?.sentiment)
-    dl.conversation.sentiment = meta.sentiment as typeof dl.conversation.sentiment;
+
+  if (meta?.intent || meta?.sentiment) {
+    await db
+      .update(conversations)
+      .set({
+        intent: (meta.intent as Intent | undefined) ?? conv.intent,
+        sentiment: (meta.sentiment as Sentiment | undefined) ?? conv.sentiment,
+      })
+      .where(eq(conversations.id, conv.id));
+  }
+
+  const [leadRow] = await db.select().from(leads).where(eq(leads.id, leadId));
   // Reaching the chat implies at least "engaged".
-  dl.lead.stage = advanceStage(dl.lead.stage, "engaged");
-  persist(s);
+  await db
+    .update(leads)
+    .set({ stage: advanceStage(leadRow.stage, "engaged"), updatedAt: nowIso() })
+    .where(eq(leads.id, leadId));
+
+  const maxTs = fresh.reduce(
+    (acc, m) => (m.ts && new Date(m.ts).getTime() > new Date(acc).getTime() ? m.ts : acc),
+    sessionRow.lastSeen,
+  );
+  if (maxTs !== sessionRow.lastSeen) {
+    await db
+      .update(visitorSessions)
+      .set({ lastSeen: maxTs })
+      .where(eq(visitorSessions.id, sessionId));
+  }
+
+  const dl = await getLead(leadId);
+  if (!dl) throw new Error(`appendMessages: lead ${leadId} vanished mid-write`);
   return dl;
+}
+
+// --- lead / preview helpers ----------------------------------------------------
+
+export async function getLeadByPreviewId(previewId: string) {
+  const [preview] = await db.select().from(previews).where(eq(previews.id, previewId));
+  if (!preview) return undefined;
+  const [lead] = await db.select().from(leads).where(eq(leads.id, preview.leadId));
+  if (!lead) return undefined;
+  return { lead, preview };
+}
+
+export async function getLeadRow(leadId: string) {
+  const [lead] = await db.select().from(leads).where(eq(leads.id, leadId));
+  return lead;
+}
+
+export async function updateLeadFields(
+  leadId: string,
+  patch: Partial<Omit<typeof leads.$inferInsert, "id" | "createdAt">>,
+) {
+  await db
+    .update(leads)
+    .set({ ...patch, updatedAt: nowIso() })
+    .where(eq(leads.id, leadId));
+}
+
+export async function advanceLeadStage(leadId: string, candidate: LeadStage) {
+  const [row] = await db.select().from(leads).where(eq(leads.id, leadId));
+  if (!row) return;
+  const next = advanceStage(row.stage, candidate);
+  if (next !== row.stage) {
+    await db.update(leads).set({ stage: next, updatedAt: nowIso() }).where(eq(leads.id, leadId));
+  }
+}
+
+export async function updatePreview(
+  previewId: string,
+  patch: Partial<Omit<typeof previews.$inferInsert, "id" | "leadId">>,
+) {
+  await db.update(previews).set(patch).where(eq(previews.id, previewId));
+}
+
+// --- visitor sessions ----------------------------------------------------------
+
+export async function createVisitorSession(input: {
+  previewId: string;
+  leadId: string;
+  device?: DeviceContext;
+  geo?: GeoContext;
+  referrer?: string;
+}) {
+  const now = nowIso();
+  const prior = await db
+    .select({ id: visitorSessions.id })
+    .from(visitorSessions)
+    .where(eq(visitorSessions.leadId, input.leadId));
+  const row = {
+    id: `ses_${nanoid(16)}`,
+    previewId: input.previewId,
+    leadId: input.leadId,
+    device: input.device ?? null,
+    geo: input.geo ?? null,
+    referrer: input.referrer ?? null,
+    startedAt: now,
+    lastSeen: now,
+    returning: prior.length > 0,
+  };
+  await db.insert(visitorSessions).values(row);
+  return row;
+}
+
+export async function getVisitorSession(sessionId: string) {
+  const [row] = await db.select().from(visitorSessions).where(eq(visitorSessions.id, sessionId));
+  return row;
+}
+
+// --- conversations (chat backend) ----------------------------------------------
+
+export async function getConversationForLead(leadId: string): Promise<Conversation | undefined> {
+  const [conv] = await db.select().from(conversations).where(eq(conversations.leadId, leadId));
+  if (!conv) return undefined;
+  const msgs = await db
+    .select()
+    .from(messages)
+    .where(eq(messages.conversationId, conv.id))
+    .orderBy(messages.ts);
+  return toConversation(conv, msgs);
+}
+
+export async function getConversationRow(leadId: string) {
+  const [conv] = await db.select().from(conversations).where(eq(conversations.leadId, leadId));
+  return conv;
+}
+
+// Persist the opening greeting at boot, so resumed histories start with the
+// agent instead of the lead. Callers re-fetch the conversation afterwards.
+export async function seedConversation(
+  leadId: string,
+  sessionId: string,
+  greetingText: string,
+): Promise<void> {
+  let [conv] = await db.select().from(conversations).where(eq(conversations.leadId, leadId));
+  if (!conv) {
+    await db
+      .insert(conversations)
+      .values({
+        id: `conv_${sessionId}`,
+        leadId,
+        sessionId,
+        channel: "web" as const,
+        intent: null,
+        sentiment: null,
+        lastQuickReplies: null,
+      })
+      .onConflictDoNothing();
+    [conv] = await db.select().from(conversations).where(eq(conversations.leadId, leadId));
+  }
+  if (!conv) return;
+
+  // Re-count right before inserting — a concurrent boot may have seeded (or a
+  // message may have landed) between the caller's check and now.
+  const [count] = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(messages)
+    .where(eq(messages.conversationId, conv.id));
+  if ((count?.n ?? 0) > 0) return;
+
+  await db.insert(messages).values({
+    id: `msg_${nanoid(10)}`,
+    conversationId: conv.id,
+    role: "phillip",
+    text: greetingText,
+    intent: null,
+    sentiment: null,
+    ts: nowIso(),
+  });
+}
+
+export async function setConversationQuickReplies(conversationId: string, qrs: QuickReply[]) {
+  await db
+    .update(conversations)
+    .set({ lastQuickReplies: qrs })
+    .where(eq(conversations.id, conversationId));
+}
+
+// --- budget / usage --------------------------------------------------------------
+
+export async function spendForLead(leadId: string): Promise<number> {
+  const [row] = await db
+    .select({ total: sql<number>`coalesce(sum(${usageLedger.costUsd}), 0)` })
+    .from(usageLedger)
+    .where(eq(usageLedger.leadId, leadId));
+  return row?.total ?? 0;
+}
+
+export async function recordUsage(input: {
+  leadId: string;
+  kind: "chat" | "iteration";
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+}) {
+  await db.insert(usageLedger).values({ ...input, createdAt: nowIso() });
+}
+
+export async function usageForLead(leadId: string) {
+  return db
+    .select()
+    .from(usageLedger)
+    .where(eq(usageLedger.leadId, leadId))
+    .orderBy(desc(usageLedger.createdAt));
+}
+
+// --- site files (iteration executor) ----------------------------------------------
+
+export async function getSiteFiles(leadId: string): Promise<{ path: string; content: string }[]> {
+  const rows = await db.select().from(siteFiles).where(eq(siteFiles.leadId, leadId));
+  return rows.map((r) => ({ path: r.path, content: r.content }));
+}
+
+export async function putSiteFiles(leadId: string, files: { path: string; content: string }[]) {
+  const now = nowIso();
+  for (const f of files) {
+    await db
+      .insert(siteFiles)
+      .values({ leadId, path: f.path, content: f.content, updatedAt: now })
+      .onConflictDoUpdate({
+        target: [siteFiles.leadId, siteFiles.path],
+        set: { content: f.content, updatedAt: now },
+      });
+  }
+}
+
+export async function deleteSiteFile(leadId: string, path: string) {
+  await db.delete(siteFiles).where(and(eq(siteFiles.leadId, leadId), eq(siteFiles.path, path)));
+}
+
+// --- iterations --------------------------------------------------------------------
+
+export async function createIteration(input: {
+  leadId: string;
+  previewId: string;
+  sessionId?: string;
+  round: number;
+  changeSet: ChangeSet;
+  status: IterationRowStatus;
+  statusReason?: string;
+}) {
+  const now = nowIso();
+  const row = {
+    id: `itr_${nanoid(12)}`,
+    leadId: input.leadId,
+    previewId: input.previewId,
+    sessionId: input.sessionId ?? null,
+    round: input.round,
+    changeSet: input.changeSet,
+    status: input.status,
+    statusReason: input.statusReason ?? null,
+    resultUrl: null,
+    version: null,
+    deploymentId: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await db.insert(iterations).values(row);
+  return row;
+}
+
+export async function updateIteration(
+  id: string,
+  patch: Partial<Omit<typeof iterations.$inferInsert, "id" | "createdAt">>,
+) {
+  await db
+    .update(iterations)
+    .set({ ...patch, updatedAt: nowIso() })
+    .where(eq(iterations.id, id));
+}
+
+export async function getIteration(id: string) {
+  const [row] = await db.select().from(iterations).where(eq(iterations.id, id));
+  return row;
+}
+
+export async function countIterations(leadId: string): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(iterations)
+    .where(eq(iterations.leadId, leadId));
+  return row?.n ?? 0;
+}
+
+export async function listIterations() {
+  return db
+    .select({
+      iteration: iterations,
+      business: leads.business,
+    })
+    .from(iterations)
+    .leftJoin(leads, eq(iterations.leadId, leads.id))
+    .orderBy(desc(iterations.createdAt));
+}
+
+// --- orders ---------------------------------------------------------------------
+
+export async function createOrder(input: {
+  leadId: string;
+  stripeSessionId: string;
+  amountTotal: number;
+  currency: string;
+}) {
+  const now = nowIso();
+  const row = {
+    id: `ord_${nanoid(12)}`,
+    leadId: input.leadId,
+    stripeSessionId: input.stripeSessionId,
+    stripeSubscriptionId: null,
+    stripeCustomerId: null,
+    amountTotal: input.amountTotal,
+    currency: input.currency,
+    status: "pending" as const,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await db.insert(orders).values(row);
+  return row;
+}
+
+export async function markOrderBySession(
+  stripeSessionId: string,
+  patch: Partial<
+    Pick<
+      typeof orders.$inferInsert,
+      "status" | "stripeSubscriptionId" | "stripeCustomerId" | "amountTotal"
+    >
+  >,
+) {
+  const [row] = await db.select().from(orders).where(eq(orders.stripeSessionId, stripeSessionId));
+  if (!row) return undefined;
+  await db
+    .update(orders)
+    .set({ ...patch, updatedAt: nowIso() })
+    .where(eq(orders.id, row.id));
+  return row;
+}
+
+// --- escalations ------------------------------------------------------------------
+
+export async function createEscalation(input: {
+  leadId: string;
+  sessionId?: string;
+  email: string;
+  reason?: string;
+}) {
+  const row = {
+    id: `esc_${nanoid(12)}`,
+    leadId: input.leadId,
+    sessionId: input.sessionId ?? null,
+    email: input.email,
+    reason: input.reason ?? null,
+    status: "open" as const,
+    createdAt: nowIso(),
+  };
+  await db.insert(escalations).values(row);
+  return row;
+}
+
+export async function listEscalations(leadId?: string) {
+  const q = db.select().from(escalations);
+  return leadId ? q.where(eq(escalations.leadId, leadId)) : q;
+}
+
+export async function updateEscalation(id: string, patch: { status: "open" | "handled" }) {
+  await db.update(escalations).set(patch).where(eq(escalations.id, id));
+}
+
+// --- settings ---------------------------------------------------------------------
+
+export interface PricingSettings {
+  setupAmountCents: number;
+  monthlyAmountCents: number;
+  currency: string;
+}
+
+export interface PersonaSettings {
+  name: string;
+  title: string;
+  avatarUrl: string;
+}
+
+export const DEFAULT_PRICING: PricingSettings = {
+  setupAmountCents: 29900,
+  monthlyAmountCents: 4900,
+  currency: "eur",
+};
+
+export const DEFAULT_PERSONA: PersonaSettings = {
+  name: "Phillip",
+  title: "founder · nutz",
+  avatarUrl: "/phillip.jpg",
+};
+
+export async function getSetting<T>(key: string, fallback: T): Promise<T> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, key));
+  return row ? (row.value as T) : fallback;
+}
+
+export async function setSetting(key: string, value: unknown) {
+  await db
+    .insert(settings)
+    .values({ key, value })
+    .onConflictDoUpdate({ target: settings.key, set: { value } });
+}
+
+// Insert a synthetic analytics event from the backend (webhook, executor) so
+// the funnel/timeline reflect off-page milestones too.
+export async function insertBackendEvent(
+  leadId: string,
+  sessionId: string,
+  type: AnalyticsEvent["type"],
+  payload: Record<string, unknown>,
+) {
+  await db
+    .insert(events)
+    .values({
+      id: `evt_${nanoid(12)}`,
+      sessionId,
+      leadId,
+      type,
+      payload,
+      ts: nowIso(),
+    })
+    .onConflictDoNothing();
 }

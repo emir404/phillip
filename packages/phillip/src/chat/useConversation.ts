@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import type { Tracker } from "../analytics";
+import { defaultGreeting } from "../intent/greeting";
 import type { Conversation, Intent, Message, QuickReply, Sentiment } from "../intent/types";
 import { prefixedId } from "../lib/id";
 import { log } from "../lib/log";
@@ -15,7 +16,12 @@ export const REACTION_QUICK_REPLIES: QuickReply[] = [
   { id: "qr_no", label: "not feeling it", intent: "objection" },
 ];
 
-export type ControlEvent = { type: "start_iteration" | "escalate" | "open_checkout" };
+// Control events carry the backend's payload through — `hint` is the lead's
+// concrete change request, so the iteration flow never has to re-ask.
+export type ControlEvent =
+  | { type: "start_iteration"; hint?: string }
+  | { type: "escalate"; reason?: string }
+  | { type: "open_checkout" };
 
 export interface UseConversationOptions {
   client: TransportClient;
@@ -34,25 +40,27 @@ export interface ConversationApi {
   quickReplies: QuickReply[];
   send: (input: { text?: string; quickReply?: QuickReply }) => void;
   appendSystem: (text: string, error?: boolean) => void;
-  appendPhillip: (text: string) => void;
+  appendPhillip: (text: string, extra?: { href?: string }) => void;
   retryLast: () => void;
 }
 
 const nowIso = (): string => new Date().toISOString();
 
 function greeting(persona: Persona, business: string): Message {
-  const text =
-    persona.greeting ??
-    `hey, i'm ${persona.name.toLowerCase()}. i built this one for ${business}. honest take — what do you think?`;
+  const text = persona.greeting ?? defaultGreeting(persona.name, business);
   return { id: prefixedId("msg"), role: "phillip", text, ts: nowIso() };
 }
 
 export function useConversation(opts: UseConversationOptions): ConversationApi {
   const { client, sessionId, persona, business, tracker } = opts;
 
-  const [messages, setMessages] = useState<Message[]>(() =>
-    opts.initial?.messages.length ? opts.initial.messages : [greeting(persona, business)],
-  );
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const initial = opts.initial?.messages ?? [];
+    if (initial.length === 0) return [greeting(persona, business)];
+    // Histories persisted before the boot-time greeting existed start with the
+    // lead — prepend the greeting so the transcript still opens with the agent.
+    return initial[0]?.role === "phillip" ? initial : [greeting(persona, business), ...initial];
+  });
   const [streaming, setStreaming] = useState(false);
   const [quickReplies, setQuickReplies] = useState<QuickReply[]>(() =>
     opts.initial ? [] : REACTION_QUICK_REPLIES,
@@ -72,8 +80,12 @@ export function useConversation(opts: UseConversationOptions): ConversationApi {
   };
 
   // Agent-side messages that aren't streamed (e.g. iteration playback / "done").
-  const appendPhillip = (text: string): void => {
-    setMessages((m) => [...m, { id: prefixedId("msg"), role: "phillip", text, ts: nowIso() }]);
+  // `href` makes the bubble tappable — used for "done — tap to see it".
+  const appendPhillip = (text: string, extra?: { href?: string }): void => {
+    setMessages((m) => [
+      ...m,
+      { id: prefixedId("msg"), role: "phillip", text, ts: nowIso(), href: extra?.href },
+    ]);
   };
 
   async function runStream(req: SendMessageRequest): Promise<void> {
@@ -116,10 +128,10 @@ export function useConversation(opts: UseConversationOptions): ConversationApi {
             setQuickReplies(ev.data.quickReplies);
             break;
           case "start_iteration":
-            opts.onControl?.({ type: "start_iteration" });
+            opts.onControl?.({ type: "start_iteration", hint: ev.data.hint });
             break;
           case "escalate":
-            opts.onControl?.({ type: "escalate" });
+            opts.onControl?.({ type: "escalate", reason: ev.data.reason });
             break;
           case "open_checkout":
             opts.onControl?.({ type: "open_checkout" });

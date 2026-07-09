@@ -18,7 +18,9 @@
       "**/.vite",
       "**/.next",
       "**/next-env.d.ts",
-      "**/.data"
+      "**/.data",
+      "**/public/phillip.js",
+      "**/drizzle"
     ]
   },
   "formatter": {
@@ -36,5 +38,17 @@
         "useHookAtTopLevel": "error"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "include": ["**/components/ui/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noLabelWithoutControl": "off"
+          }
+        }
+      }
+    }
+  ]
 }

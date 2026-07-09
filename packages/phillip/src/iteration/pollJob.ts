@@ -25,7 +25,10 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-/** Poll an iteration job until it's done or failed (or we give up / abort). */
+/**
+ * Poll an iteration job until it settles — done, failed, or handed to a human
+ * (`queued_manual`) — or we give up / abort.
+ */
 export async function pollJob(
   client: TransportClient,
   id: string,
@@ -37,7 +40,9 @@ export async function pollJob(
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (opts.signal?.aborted) throw new Error("aborted");
     const job = await client.getIteration(id);
-    if (job.status === "done" || job.status === "failed") return job;
+    if (job.status === "done" || job.status === "failed" || job.status === "queued_manual") {
+      return job;
+    }
     await sleep(interval, opts.signal);
   }
   throw new Error("iteration timed out");

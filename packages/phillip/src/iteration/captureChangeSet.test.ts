@@ -21,12 +21,28 @@ describe("captureChangeSet", () => {
     expect(captureChangeSet([], "  make it pop  ").freeText).toBe("make it pop");
     expect(captureChangeSet([], "   ").freeText).toBeUndefined();
   });
+
+  it("attaches a picked element target verbatim", () => {
+    const target = {
+      selector: '[data-section="hero"] h1',
+      tag: "h1",
+      text: "Marisol's",
+      section: "hero",
+    };
+    expect(captureChangeSet([], "make this bigger", target).target).toEqual(target);
+    expect(captureChangeSet([], "make it pop").target).toBeUndefined();
+  });
 });
 
 describe("isHeavyRequest (light vs heavy boundary)", () => {
   it("keeps guided-only and small tweaks light", () => {
     expect(isHeavyRequest(captureChangeSet([opt("warmer"), opt("tighten_copy")]))).toBe(false);
     expect(isHeavyRequest(captureChangeSet([], "make the headline punchier"))).toBe(false);
+  });
+
+  it("keeps a server hint (auto-submit path) light when it's a simple tweak", () => {
+    // The exact shape startIteration builds from a control-event hint.
+    expect(isHeavyRequest(captureChangeSet([], "change the name to 'Emir's Cafe'"))).toBe(false);
   });
 
   it("flags new pages, integrations, and commerce as heavy", () => {

@@ -1,7 +1,9 @@
-# Deploy target: the @nutz/dashboard Next.js app (analytics UI + ingestion API).
+# Deploy target: the @nutz/dashboard Next.js app (backend + team dashboard).
 # Build context is the repo root so the workspace dependency (@nutz/phillip) is
-# available. `docker build -t phillip-dashboard . && docker run -p 5174:5174 \
-#   -v phillip-data:/data phillip-dashboard`
+# available. Persistence is Turso/libsql — pass the env vars from
+# apps/dashboard/.env.example at runtime:
+#   docker build -t phillip-dashboard .
+#   docker run -p 5174:5174 --env-file apps/dashboard/.env.local phillip-dashboard
 
 FROM node:20-slim AS base
 ENV PNPM_HOME=/pnpm
@@ -21,9 +23,6 @@ RUN pnpm --filter @nutz/dashboard build
 # --- run ---
 FROM base AS run
 ENV NODE_ENV=production
-# The JSON store persists here; mount a volume so data survives restarts.
-ENV PHILLIP_DATA_FILE=/data/phillip.json
-VOLUME ["/data"]
 COPY --from=build /app ./
 EXPOSE 5174
 CMD ["pnpm", "--filter", "@nutz/dashboard", "start"]

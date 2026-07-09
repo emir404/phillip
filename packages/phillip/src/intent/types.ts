@@ -30,6 +30,8 @@ export interface Message {
    * present so the feature is ready to wire to the backend later.
    */
   reaction?: string;
+  /** When set, tapping the bubble navigates there ("done — tap to see it"). */
+  href?: string;
 }
 
 export interface Conversation {

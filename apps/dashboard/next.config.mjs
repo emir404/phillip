@@ -1,8 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // We lint the whole monorepo with Biome, so skip Next's ESLint pass at build.
-  eslint: { ignoreDuringBuilds: true },
+  // Linting is Biome's job (Next 16 no longer runs ESLint at build anyway).
 };
 
 export default nextConfig;

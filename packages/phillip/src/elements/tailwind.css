@@ -1,0 +1,35 @@
+/*
+ * Tailwind v4 entry for the vendored Elements (src/elements). Compiled by
+ * scripts/build-css.mjs into tailwind.generated.ts and adopted into the shadow
+ * root alongside the legacy styles string (see src/mount.tsx).
+ *
+ * Deliberately NO preflight import: the shadow root already has
+ * `:host { all: initial }` plus its own box-sizing/border reset in
+ * src/styles.ts, and preflight would fight the host page inside the shadow.
+ *
+ * Scanning: `source(none)` turns off cwd auto-detection (which would sweep
+ * playground/, mock/, and markdown prose); `@source "../"` scans all of src/
+ * instead — paths are relative to this file. The generated output re-enters
+ * src/, so it is explicitly excluded to keep the build idempotent.
+ */
+/* (`@tailwind utilities` rather than importing tailwindcss/utilities: same
+   output, but biome's strict @import grammar rejects the nonstandard
+   source(none) modifier while unknown at-rules parse loosely.) */
+@import "tailwindcss/theme" layer(theme);
+@tailwind utilities source(none);
+
+@source "../";
+@source not "./tailwind.generated.ts";
+
+@theme {
+  --color-brand-300: #4ebaff;
+  --color-brand-600: #0088ff;
+  --color-ink-950: #101010;
+  --color-ink-900: #1c1c1c;
+  --color-ink-850: #232323;
+  --color-ink-800: #222222;
+  --color-ink-700: #383838;
+  --color-them: #e9e9ea;
+  --color-glow: #054d8c;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+}

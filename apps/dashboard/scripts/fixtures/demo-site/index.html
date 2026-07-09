@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Forge Barbers — Sharp cuts, no fuss</title>
+    <style>
+      :root {
+        --ink: #1b1b1f;
+        --paper: #faf7f2;
+        --brass: #b08d57;
+        --line: #e5ded2;
+      }
+      * { box-sizing: border-box; margin: 0; }
+      body { font-family: Georgia, "Times New Roman", serif; color: var(--ink); background: var(--paper); line-height: 1.6; }
+      header, section, footer { padding: 64px 24px; max-width: 960px; margin: 0 auto; }
+      h1 { font-size: 44px; line-height: 1.1; }
+      h2 { font-size: 28px; margin-bottom: 16px; }
+      p { max-width: 60ch; }
+      .cta { display: inline-block; margin-top: 24px; padding: 14px 28px; background: var(--ink); color: var(--paper); text-decoration: none; border-radius: 6px; font-family: system-ui, sans-serif; font-size: 15px; }
+      .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 24px; }
+      .card { border: 1px solid var(--line); border-radius: 10px; padding: 20px; background: #fff; }
+      .price { font-size: 22px; color: var(--brass); font-family: system-ui, sans-serif; }
+      .gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 24px; }
+      .gallery button { aspect-ratio: 1; border: 1px solid var(--line); border-radius: 8px; background: linear-gradient(135deg, #ddd2c0, #b8a988); cursor: pointer; }
+      footer { border-top: 1px solid var(--line); font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <header data-section="hero">
+      <p style="font-family: system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; font-size: 12px; color: var(--brass);">Est. 2019 · Rotterdam</p>
+      <h1>Sharp cuts, honest prices, zero fuss.</h1>
+      <p>Forge Barbers is a three-chair shop on Witte de Withstraat. Walk-ins welcome, appointments faster.</p>
+      <a class="cta" href="#book" data-cta="book">Book a chair</a>
+    </header>
+
+    <section data-section="services">
+      <h2>Services</h2>
+      <div class="cards">
+        <div class="card"><h3>Classic cut</h3><p class="price">€28</p><p>Scissors or clippers, hot towel finish.</p></div>
+        <div class="card"><h3>Beard trim</h3><p class="price">€18</p><p>Shape, line-up, oil.</p></div>
+        <div class="card"><h3>The full forge</h3><p class="price">€42</p><p>Cut, beard, wash — the works.</p></div>
+      </div>
+    </section>
+
+    <section data-section="gallery">
+      <h2>The shop</h2>
+      <div class="gallery">
+        <button type="button" data-gallery aria-label="photo 1"></button>
+        <button type="button" data-gallery aria-label="photo 2"></button>
+        <button type="button" data-gallery aria-label="photo 3"></button>
+      </div>
+    </section>
+
+    <section data-section="pricing" id="book">
+      <h2>Booking &amp; prices</h2>
+      <p>No memberships, no upsells. Pay per visit, card or cash.</p>
+      <a class="cta" href="tel:+31101234567" data-contact>Call the shop</a>
+    </section>
+
+    <section data-section="contact">
+      <h2>Find us</h2>
+      <p data-contact>Witte de Withstraat 84, Rotterdam · Tue–Sat 10:00–19:00</p>
+    </section>
+
+    <footer>
+      <p>© Forge Barbers. Site by nutz.</p>
+    </footer>
+
+    <!-- phillip embed: DO NOT REMOVE — replace host with the deployed dashboard origin -->
+    <script src="https://PHILLIP_HOST/phillip.js" data-preview-id="prv_forge" defer></script>
+  </body>
+</html>

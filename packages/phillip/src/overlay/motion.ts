@@ -73,18 +73,32 @@ export function itemVariants(reduce: boolean): Variants {
 
 // --- variant factories ------------------------------------------------------
 
-export function panelVariants(reduce: boolean): Variants {
+// `enterDelay` holds the panel back a beat (used when the stage reappears as
+// the takeover rail glides home, so the two land together). The exit is
+// dynamic: when the flow is switching INTO the takeover the backdrop covers
+// the stage and the rail morphs out of its place — a fast fade is all that's
+// honest there; every other exit keeps the blur/slide.
+export function panelVariants(reduce: boolean, enterDelay = 0): Variants {
   if (reduce) {
     return {
       initial: { opacity: 0 },
-      animate: { opacity: 1, transition: { duration: 0.12 } },
+      animate: { opacity: 1, transition: { duration: 0.12, delay: enterDelay } },
       exit: { opacity: 0, transition: { duration: 0.12 } },
     };
   }
   return {
     initial: { opacity: 0, y: 12, scale: 0.96, filter: "blur(8px)" },
-    animate: { opacity: 1, y: 0, scale: 1, filter: "blur(0px)", transition: spring.snappy },
-    exit: { opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)", transition: exitTween },
+    animate: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      filter: "blur(0px)",
+      transition: { ...spring.snappy, delay: enterDelay },
+    },
+    exit: (c?: { toIteration?: boolean }) =>
+      c?.toIteration
+        ? { opacity: 0, transition: { duration: 0.12 } }
+        : { opacity: 0, y: 8, scale: 0.98, filter: "blur(4px)", transition: exitTween },
   };
 }
 

@@ -1,29 +1,30 @@
 import type { AnalyticsEvent } from "@nutz/phillip";
-import { NextResponse } from "next/server";
+import { corsEmpty, corsJson, preflight } from "../../../lib/cors";
 import { saveEvents } from "../../../lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+export const OPTIONS = preflight;
 
 interface EventsBatch {
   sessionId: string;
   events: AnalyticsEvent[];
 }
 
-// The embed's silent analytics land here (POST {apiBase}/v1/events). Same wire
-// shape as the embed's EventsBatchRequest, so pointing a live embed's apiBase at
-// this deploy persists its behaviour stream verbatim.
+// The embed's silent analytics land here (POST {apiBase}/v1/events), batched
+// and flushed cross-origin from the lead's preview site.
 export async function POST(req: Request) {
   let body: EventsBatch;
   try {
     body = (await req.json()) as EventsBatch;
   } catch {
-    return NextResponse.json({ error: "invalid json" }, { status: 400 });
+    return corsJson({ error: "invalid json" }, { status: 400 });
   }
   if (!body?.sessionId || !Array.isArray(body.events)) {
-    return NextResponse.json({ error: "sessionId and events[] required" }, { status: 400 });
+    return corsJson({ error: "sessionId and events[] required" }, { status: 400 });
   }
-  saveEvents(body.sessionId, body.events);
+  await saveEvents(body.sessionId, body.events);
   // The embed only checks for a 2xx (sendEvents is fire-and-forget).
-  return new NextResponse(null, { status: 204 });
+  return corsEmpty();
 }

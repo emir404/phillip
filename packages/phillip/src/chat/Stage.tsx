@@ -1,5 +1,5 @@
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import {
   containerVariants,
   itemVariants,
@@ -23,21 +23,27 @@ export function Stage({
   children,
   footer,
   footerKey = "chat",
+  stageRef,
+  enterDelay = 0,
 }: {
   persona: Persona;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
   footerKey?: string;
+  /** Lets the widget measure the stage box for the takeover morph. */
+  stageRef?: Ref<HTMLDivElement>;
+  enterDelay?: number;
 }) {
   const reduce = useReducedMotion() ?? false;
   return (
     <m.div
+      ref={stageRef}
       className="stage"
       // biome-ignore lint/a11y/useSemanticElements: a floating chat surface, not a modal <dialog>
       role="dialog"
       aria-label={`chat with ${persona.name}`}
-      variants={panelVariants(reduce)}
+      variants={panelVariants(reduce, enterDelay)}
       initial="initial"
       animate="animate"
       exit="exit"

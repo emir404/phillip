@@ -1,4 +1,10 @@
-import { AnimatePresence, LazyMotion, MotionConfig, domAnimation } from "motion/react";
+import {
+  AnimatePresence,
+  LazyMotion,
+  MotionConfig,
+  domAnimation,
+  useReducedMotion,
+} from "motion/react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Tracker } from "./analytics/tracker";
 import { Bubble } from "./chat/Bubble";
@@ -11,17 +17,12 @@ import { type ControlEvent, useConversation } from "./chat/useConversation";
 import { PhillipProvider } from "./core/PhillipProvider";
 import type { RuntimeConfig } from "./core/config";
 import { useBoot } from "./core/useBoot";
+import type { TaskPhase } from "./elements";
 import { FunnelEmitter } from "./funnel";
 import type { Intent, Sentiment } from "./intent/types";
-import {
-  type IterationOption,
-  IterationPanel,
-  MAX_INLINE_ROUNDS,
-  captureChangeSet,
-  isHeavyRequest,
-  useIteration,
-} from "./iteration";
+import { MAX_INLINE_ROUNDS, captureChangeSet, isHeavyRequest, useIteration } from "./iteration";
 import { log } from "./lib/log";
+import { applyThemeVars } from "./mount";
 import { Vignette } from "./overlay/Vignette";
 import {
   CheckoutPanel,
@@ -30,9 +31,12 @@ import {
   openCheckout,
   submitEscalation,
 } from "./stubs";
+import { Takeover } from "./takeover";
+import { type Rect, captureRect } from "./takeover/morph";
 import type { TransportClient } from "./transport";
 import type { BootConfig } from "./types/boot";
 import type { PingReason } from "./types/events";
+import type { ElementTarget } from "./types/records";
 
 export interface PhillipWidgetProps {
   runtime: RuntimeConfig;
@@ -80,6 +84,28 @@ function Ready({
 
   const [open, setOpen] = useState(false);
   const [flow, setFlow] = useState<Flow>("chat");
+  const reduce = useReducedMotion() ?? false;
+  // Mirrors for values read inside long-lived async closures (SSE control
+  // handlers, iteration onReady) — state reads there would be stale.
+  const flowRef = useRef<Flow>("chat");
+  const changeFlow = (next: Flow) => {
+    flowRef.current = next;
+    setFlow(next);
+  };
+  const roundRef = useRef(0);
+  // The stage's box, snapshotted the instant the flow switches to iteration —
+  // the takeover rail morphs out of (and back into) this rect.
+  const stageElRef = useRef<HTMLDivElement | null>(null);
+  const stageRectRef = useRef<Rect | null>(null);
+  // Holds the stage back a beat when it reappears under the returning rail.
+  const [stageEnterDelay, setStageEnterDelay] = useState(0);
+  // Takeover state: what the site frame shows, the inline build status, the
+  // last completed result (close navigates there so the page is never stale),
+  // and the lead's last ask (the task's summary line).
+  const [frameSrc, setFrameSrc] = useState<string | null>(null);
+  const [taskPhase, setTaskPhase] = useState<TaskPhase | null>(null);
+  const lastResultRef = useRef<string | null>(null);
+  const lastAskRef = useRef<string | undefined>(undefined);
   const [escalating, setEscalating] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
   // The resting peek beside the bubble — held back for a beat on landing so the
@@ -96,6 +122,7 @@ function Ready({
   // Opening the floating conversation — from a ping or the resting bubble.
   const openConversation = (trigger: PingReason | "manual") => {
     openTriggerRef.current = trigger;
+    setStageEnterDelay(0);
     setOpen(true);
   };
 
@@ -107,17 +134,53 @@ function Ready({
     else if (intent === "escalate") funnel.to("escalated", "escalate");
   };
 
-  // The backend drives which sub-flow opens via control events.
+  // Submit one concrete ask through the heavy/round-cap gate. Returns false
+  // when it was diverted to escalation instead of building.
+  const submitAsk = (text: string, target?: ElementTarget): boolean => {
+    const changeSet = captureChangeSet([], text, target);
+    if (isHeavyRequest(changeSet) || roundRef.current >= MAX_INLINE_ROUNDS) {
+      convo.appendPhillip(
+        "that's a bigger change and worth doing right. drop your email and my colleague will pick it up.",
+      );
+      funnel.to("escalated", "heavy_or_round_cap");
+      changeFlow("escalation");
+      return false;
+    }
+    lastAskRef.current = text;
+    setTaskPhase("submitting");
+    iteration.submit(changeSet);
+    return true;
+  };
+
+  // Iteration entry — from a control event (with the backend's hint) or the
+  // lead driving it by hand. Opens the takeover; with a hint the build starts
+  // immediately: Phillip already acknowledged in his streamed reply, so
+  // re-asking is forbidden.
+  const startIteration = (hint?: string) => {
+    if (!config.features.iteration) return;
+    funnel.to("iterating", "control");
+    // Measure BEFORE the flow flips — the stage is gone next render.
+    stageRectRef.current = captureRect(stageElRef.current);
+    setFrameSrc((src) => src ?? window.location.href);
+    changeFlow("iteration");
+    const trimmed = hint?.trim();
+    if (!trimmed) return; // no concrete ask yet — the rail collects it
+    submitAsk(trimmed);
+  };
+
+  // The backend drives which sub-flow opens via control events. Feature flags
+  // from boot gate every flow — a disabled surface simply never opens.
   const onControl = (control: ControlEvent) => {
     if (control.type === "start_iteration") {
-      funnel.to("iterating", "control");
-      setFlow("iteration");
+      startIteration(control.hint);
     } else if (control.type === "escalate") {
+      if (!config.features.escalation) return;
       funnel.to("escalated", "control");
-      setFlow("escalation");
+      changeFlow("escalation");
     } else if (control.type === "open_checkout") {
+      if (!config.features.checkout) return;
       funnel.to("checkout", "control");
-      setFlow("checkout");
+      changeFlow("checkout");
     }
   };
 
@@ -135,26 +198,70 @@ function Ready({
   const iteration = useIteration({
     client,
     previewId: config.preview.id,
+    sessionId: config.session.id,
     tracker,
-    onReady: () => convo.appendPhillip("done — refresh to see it ✨"),
-    onFailed: () => convo.appendSystem("hmm, that one didn't take. want to try again?", true),
+    // Real builds take minutes, not seconds — poll gently for up to ~300s.
+    pollIntervalMs: 2500,
+    maxAttempts: 120,
+    // In the takeover, the frame reloads to the new version in place; in the
+    // floating chat, the new version arrives as a tappable destination.
+    onReady: (job) => {
+      if (job.resultUrl) lastResultRef.current = job.resultUrl;
+      if (flowRef.current === "iteration") {
+        setTaskPhase("done");
+        if (job.resultUrl) setFrameSrc(job.resultUrl);
+        return;
+      }
+      convo.appendPhillip(
+        "done — tap to see it ✨",
+        job.resultUrl ? { href: job.resultUrl } : undefined,
+      );
+    },
+    onFailed: () => {
+      if (flowRef.current === "iteration") {
+        setTaskPhase("failed");
+        return;
+      }
+      convo.appendSystem("hmm, that one didn't take. want to try again?", true);
+    },
+    onManual: () => {
+      if (flowRef.current === "iteration") {
+        setTaskPhase("manual");
+        return;
+      }
+      convo.appendPhillip(
+        "this one needs a human touch — my colleague is picking it up and will email you shortly.",
+      );
+    },
   });
 
-  // Phase 04 vs 05 split: heavy asks or too many inline rounds hand off.
-  const onIterationSubmit = (selected: IterationOption[], freeText: string) => {
-    const changeSet = captureChangeSet(selected, freeText);
-    if (isHeavyRequest(changeSet) || iteration.round >= MAX_INLINE_ROUNDS) {
-      convo.appendPhillip(
-        "that's a bigger change and worth doing right. drop your email and my colleague will pick it up.",
-      );
-      funnel.to("escalated", "heavy_or_round_cap");
-      setFlow("escalation");
+  // Keep the ref in step for reads inside stale closures.
+  useEffect(() => {
+    roundRef.current = iteration.round;
+  }, [iteration.round]);
+
+  // The rail's prompt (and its suggestion chips) route through the same gate
+  // the auto-submit path uses; the rail stays open showing the build status.
+  // A picked element rides along as the change-set's target.
+  const onRailSubmit = (text: string, target?: ElementTarget) => {
+    const trimmed = text.trim();
+    if (!trimmed || iteration.busy) return;
+    submitAsk(trimmed, target);
+  };
+
+  // Leaving the takeover: if a build landed while it was open, walk the host
+  // page to the fresh version — the lead just watched it, returning to the
+  // stale one would be a lie. Otherwise simply drop back to the floating chat.
+  const closeTakeover = () => {
+    const landed = lastResultRef.current;
+    if (landed && taskPhase === "done") {
+      window.location.href = landed;
       return;
     }
-    const summary = [...selected.map((s) => s.label), freeText.trim()].filter(Boolean).join(", ");
-    convo.appendPhillip(`got it — ${summary}. give me a sec.`);
-    iteration.submit(changeSet);
-    setFlow("chat");
+    setTaskPhase(null);
+    // The rail glides home first; the stage lands right behind it.
+    setStageEnterDelay(0.15);
+    changeFlow("chat");
   };
 
   // Phase 05 — Escalation (stub): capture + validate email, hand off.
@@ -165,32 +272,42 @@ function Ready({
       if (res.ok) {
         tracker.track("escalated", { email });
         convo.appendPhillip("sent. look out for a note from phillip@nutz.inc.");
-        setFlow("chat");
+        changeFlow("chat");
       } else {
         convo.appendSystem("that email looks off — mind checking it?", true);
       }
     });
   };
 
-  // Phase 06 — Close & payment (stub): simulate a successful purchase, then
-  // move into setup.
+  // Phase 06 — Close & payment: hand off to Stripe's hosted page in a new tab.
+  // The client never flips the funnel to paid — the payment webhook does, and
+  // the next boot reflects it.
   const onPay = () => {
     setCheckingOut(true);
     tracker.track("checkout_started", {});
-    void openCheckout(client, config.session.id).then(() => {
-      setCheckingOut(false);
-      funnel.to("paid", "simulated");
-      tracker.track("paid", {});
-      convo.appendPhillip("payment received (simulated). let's get you set up.");
-      setFlow("setup");
-    });
+    void openCheckout(client, config.session.id)
+      .then((res) => {
+        if (res.checkoutUrl) {
+          window.open(res.checkoutUrl, "_blank", "noopener");
+          convo.appendPhillip(
+            "i opened secure checkout in a new tab — i'll get everything live the moment it's done.",
+          );
+          changeFlow("chat");
+        } else {
+          convo.appendSystem("checkout didn't open — mind trying again?", true);
+        }
+      })
+      .catch(() => {
+        convo.appendSystem("checkout didn't open — mind trying again?", true);
+      })
+      .finally(() => setCheckingOut(false));
   };
 
   // Phase 07 — Setup (stub): walk the checklist, then go live.
   const onGoLive = () => {
     funnel.to("live", "setup_complete");
     convo.appendPhillip("you're live 🎉 i'll email your login.");
-    setFlow("chat");
+    changeFlow("chat");
   };
 
   useEffect(() => {
@@ -218,26 +335,29 @@ function Ready({
     return () => clearTimeout(t);
   }, []);
 
+  // Backend-driven theme tokens land as custom properties on .phillip-root.
+  const themeAnchor = useRef<HTMLSpanElement | null>(null);
+  useEffect(() => {
+    const vars = config.theme;
+    if (!vars || !themeAnchor.current) return;
+    const rootEl = themeAnchor.current.closest(".phillip-root");
+    if (rootEl instanceof HTMLElement) applyThemeVars(rootEl, vars);
+  }, [config.theme]);
+
   const value = useMemo(
     () => ({ runtime, client, config, tracker }),
     [runtime, client, config, tracker],
   );
 
   let footer: ReactNode;
-  if (flow === "iteration") {
+  if (flow === "escalation") {
     footer = (
       <div className="stage-card">
-        <IterationPanel
-          busy={iteration.busy}
-          onSubmit={onIterationSubmit}
-          onCancel={() => setFlow("chat")}
+        <EscalationPanel
+          busy={escalating}
+          onSubmit={onEscalate}
+          onCancel={() => changeFlow("chat")}
         />
-      </div>
-    );
-  } else if (flow === "escalation") {
-    footer = (
-      <div className="stage-card">
-        <EscalationPanel busy={escalating} onSubmit={onEscalate} onCancel={() => setFlow("chat")} />
       </div>
     );
   } else if (flow === "checkout") {
@@ -247,7 +367,7 @@ function Ready({
           offer={config.offer}
           busy={checkingOut}
           onPay={onPay}
-          onCancel={() => setFlow("chat")}
+          onCancel={() => changeFlow("chat")}
         />
       </div>
     );
@@ -277,19 +397,49 @@ function Ready({
           bundle into the drop-in. reducedMotion="user" honors the OS setting. */}
       <LazyMotion features={domAnimation} strict>
         <MotionConfig reducedMotion="user">
-          {/* The vignette darkens the corner whenever the conversation is open,
-              so the frameless bubbles always have a backdrop to read against. */}
-          <AnimatePresence>{open ? <Vignette key="vignette" /> : null}</AnimatePresence>
-          {/* Frameless transcript floating over the vignette ⇄ resting bubble,
-              in independent presences so each can play its own exit. */}
+          <span ref={themeAnchor} style={{ display: "none" }} aria-hidden />
+          {/* The glow backs the conversation whenever the floating chat is
+              open; the takeover carries its own backdrop. */}
           <AnimatePresence>
-            {open ? (
+            {open && flow !== "iteration" ? <Vignette key="vignette" /> : null}
+          </AnimatePresence>
+          {/* Floating transcript ⇄ full takeover, overlapping in ONE presence
+              (no mode="wait") so the exit and enter play together — the rail
+              morphs out of the stage's box and glides back into it. `custom`
+              feeds the exiting side the latest rect + direction. */}
+          <AnimatePresence
+            custom={{
+              stageRect: stageRectRef.current,
+              toIteration: flow === "iteration",
+              reduce,
+            }}
+          >
+            {open && flow === "iteration" ? (
+              <Takeover
+                key="takeover"
+                persona={config.persona}
+                business={config.lead.business}
+                messages={convo.messages}
+                streaming={convo.streaming}
+                frameSrc={frameSrc ?? window.location.href}
+                taskPhase={taskPhase}
+                taskSummary={lastAskRef.current}
+                showSuggestions={iteration.round === 0 && !taskPhase && !convo.streaming}
+                busy={iteration.busy}
+                stageRect={stageRectRef.current}
+                onSubmit={onRailSubmit}
+                onClose={closeTakeover}
+              />
+            ) : null}
+            {open && flow !== "iteration" ? (
               <Stage
                 key="stage"
                 persona={config.persona}
                 onClose={() => setOpen(false)}
                 footer={footer}
                 footerKey={flow}
+                stageRef={stageElRef}
+                enterDelay={stageEnterDelay}
               >
                 <Conversation messages={convo.messages} streaming={convo.streaming} />
               </Stage>

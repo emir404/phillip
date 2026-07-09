@@ -20,6 +20,8 @@ export interface CreateIterationRequest {
   previewId: string;
   changeSet: ChangeSet;
   round: number;
+  /** Attributes the build to the visitor session that asked for it. */
+  sessionId?: string;
 }
 
 export interface IterationJob {

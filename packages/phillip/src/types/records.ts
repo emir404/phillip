@@ -99,12 +99,27 @@ export interface ChangeItem {
   note?: string;
 }
 
+/** An element the lead pointed at in the preview (takeover picker). The
+ *  selector favors the generator's stable data-* hooks so the Build agent can
+ *  grep it straight out of the site files. */
+export interface ElementTarget {
+  selector: string;
+  tag: string;
+  /** Visible text of the picked element, when it's a leaf (≤60 chars). */
+  text?: string;
+  /** Nearest data-section value, when the element sits inside one. */
+  section?: string;
+}
+
 export interface ChangeSet {
   items: ChangeItem[];
   freeText?: string;
+  /** Set when the lead picked a specific element to scope the ask to. */
+  target?: ElementTarget;
 }
 
-export type IterationStatus = "queued" | "processing" | "done" | "failed";
+/** `queued_manual` = a human took the build over; the widget stops waiting. */
+export type IterationStatus = "queued" | "queued_manual" | "processing" | "done" | "failed";
 
 export interface IterationRequest {
   id: string;

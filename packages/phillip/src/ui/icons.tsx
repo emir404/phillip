@@ -51,6 +51,36 @@ export function Dismiss({ size = 14, ...props }: IconProps) {
   );
 }
 
+// Checkmark for completed states (e.g. a finished build in elements/task).
+export function Check({ size = 14, ...props }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M4.5 12.75l5 5 10-11"
+        stroke="currentColor"
+        strokeWidth="2.25"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// Crosshair for the takeover's element picker (pick-what-to-change mode).
+export function Crosshair({ size = 14, ...props }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <circle cx="12" cy="12" r="7" stroke="currentColor" strokeWidth="2" />
+      <path
+        d="M12 2v4M12 18v4M2 12h4M18 12h4"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 // The iMessage bubble tail — a self-contained shape filled with `currentColor`
 // (set to the bubble's color), so it works over any background (no mask trick).
 // Path lifted from the iMessage-simulator. Default orientation hooks to the

@@ -7,7 +7,7 @@
   "private": true,
   "packageManager": "pnpm@10.33.3",
   "engines": {
-    "node": ">=18"
+    "node": ">=20.9"
   },
   "scripts": {
     "dev": "pnpm --filter @nutz/phillip dev",
@@ -15,6 +15,7 @@
     "build": "pnpm -r build",
     "build:phillip": "pnpm --filter @nutz/phillip build",
     "build:dashboard": "pnpm --filter @nutz/dashboard build",
+    "embed": "pnpm --filter @nutz/dashboard embed",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "lint": "biome check .",

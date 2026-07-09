@@ -19,6 +19,9 @@ export interface ReplyPlan {
   text: string;
   quickReplies?: QuickReply[];
   control?: ControlType;
+  /** The concrete change request forwarded with start_iteration (like the
+   * real backend's change_request) so the widget can build without re-asking. */
+  hint?: string;
 }
 
 const REACTION_REPLIES: QuickReply[] = [
@@ -106,8 +109,11 @@ export function planReply(input: {
     return {
       intent: "iterate",
       sentiment: "neutral",
-      text: "got it. give me the specifics and i'll redo it now.",
+      text: "on it — i'll redo that right now.",
       control: "start_iteration",
+      // A typed concrete request carries straight through as the hint; the
+      // chip-driven paths above stay hint-less to exercise the empty prompt.
+      hint: input.message,
     };
   }
 
@@ -143,7 +149,8 @@ export function streamReply(
         controller.enqueue(frame("propose_quick_replies", { quickReplies: plan.quickReplies }));
       }
       if (plan.control) {
-        controller.enqueue(frame(plan.control, {}));
+        const payload = plan.control === "start_iteration" && plan.hint ? { hint: plan.hint } : {};
+        controller.enqueue(frame(plan.control, payload));
       }
       controller.enqueue(frame("done", {}));
       controller.close();

@@ -34,7 +34,24 @@ export function readScriptConfig(): ScriptConfig {
   if (!el) return {};
   return {
     previewId: el.dataset.previewId,
-    apiBase: el.dataset.apiBase,
+    // Explicit data-api-base wins; otherwise the origin that served phillip.js
+    // is the backend, so the hosted script tag needs zero extra configuration.
+    apiBase: el.dataset.apiBase ?? scriptSrcOrigin(el),
     debug: el.dataset.debug != null,
   };
+}
+
+/**
+ * Origin of the script's own absolute `src`. Reads the raw attribute (not the
+ * resolved `el.src`) so a relative or empty src stays undefined — which falls
+ * through to the same-origin default rather than pinning the page's origin.
+ */
+function scriptSrcOrigin(el: HTMLScriptElement): string | undefined {
+  const src = el.getAttribute("src");
+  if (!src) return undefined;
+  try {
+    return new URL(src).origin;
+  } catch {
+    return undefined;
+  }
 }

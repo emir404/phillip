@@ -12,10 +12,10 @@ export const dynamic = "force-dynamic";
 //   GET /v1/export              → { generatedAt, insights, leads: [...] }
 //   GET /v1/export?format=ndjson → one AgentFeedItem per line (stream-friendly)
 //   GET /v1/export?stage=paid   → only leads at/deeper than a given stage
-export function GET(req: Request) {
+export async function GET(req: Request) {
   const url = new URL(req.url);
   const format = url.searchParams.get("format");
-  const leads = getLeads();
+  const leads = await getLeads();
   const feeds = leads.map(agentFeed);
 
   if (format === "ndjson" || format === "jsonl") {

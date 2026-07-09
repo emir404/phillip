@@ -5,8 +5,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Read: the dashboard polls this for live data.
-export function GET() {
-  return NextResponse.json(getLeads());
+export async function GET() {
+  return NextResponse.json(await getLeads());
 }
 
 // Ingest: the Build agent (or the embed on boot) registers/updates a lead, its
@@ -24,6 +24,6 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  const dl = upsertLead(body);
+  const dl = await upsertLead(body);
   return NextResponse.json(dl, { status: 201 });
 }

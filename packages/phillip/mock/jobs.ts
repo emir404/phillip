@@ -26,7 +26,10 @@ export function advanceJob(id: string): IterationJob | null {
   state.polls += 1;
   if (state.polls >= state.readyAfter) {
     state.job.status = "done";
-    state.job.resultUrl = `https://nutz.site/marisol?v=${state.polls + 1}`;
+    // Same-origin relative URL, mirroring the real executor's `?v=N` on the
+    // site's own domain — the takeover iframe (and its element picker) then
+    // behave in the playground exactly as in production.
+    state.job.resultUrl = `/?v=${state.polls + 1}`;
     state.job.version = state.polls + 1;
   } else {
     state.job.status = "processing";

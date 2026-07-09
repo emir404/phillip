@@ -1,4 +1,5 @@
 import { DEFAULT_ENGAGEMENT } from "../src/engagement/weights";
+import { defaultGreeting } from "../src/intent/greeting";
 import type { Conversation } from "../src/intent/types";
 import { prefixedId } from "../src/lib/id";
 import type { BootConfig } from "../src/types/boot";
@@ -13,12 +14,27 @@ export const DEMO_PREVIEW_ID = "prv_demo";
 // placeholder headshot from /public so the widget feels like a real person.
 const PHILLIP_AVATAR = "/phillip.jpg";
 
+// Mirrors a real persisted thread: the boot-seeded greeting (same copy as the
+// server writes), the lead's reply from the first visit, then the re-visit line.
 function resumedConversation(sessionId: string): Conversation {
+  const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
   return {
     id: prefixedId("conv"),
     sessionId,
     channel: "web",
     messages: [
+      {
+        id: prefixedId("msg"),
+        role: "phillip",
+        text: defaultGreeting("Phillip", "Marisol's"),
+        ts: ago(45),
+      },
+      {
+        id: prefixedId("msg"),
+        role: "lead",
+        text: "looks great, but the photos feel a bit dark",
+        ts: ago(44),
+      },
       {
         id: prefixedId("msg"),
         role: "phillip",

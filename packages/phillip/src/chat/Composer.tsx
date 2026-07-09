@@ -1,5 +1,5 @@
 import { m, useReducedMotion } from "motion/react";
-import { type FormEvent, useState } from "react";
+import { type ChangeEvent, type FormEvent, useState } from "react";
 import { containerVariants, itemVariants, press, tapTransition } from "../overlay/motion";
 import { SendArrow } from "../ui/icons";
 
@@ -33,7 +33,7 @@ export function Composer({
       <m.input
         variants={itemVariants(reduce)}
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e: ChangeEvent<HTMLInputElement>) => setText(e.target.value)}
         placeholder="type a message…"
         aria-label="message"
         autoComplete="off"

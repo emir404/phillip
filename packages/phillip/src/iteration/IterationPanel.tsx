@@ -1,5 +1,5 @@
 import { m, useReducedMotion } from "motion/react";
-import { useState } from "react";
+import { type ChangeEvent, useState } from "react";
 import { containerVariants, itemVariants, press } from "../overlay/motion";
 import { ITERATION_OPTIONS, type IterationOption } from "./captureChangeSet";
 
@@ -69,7 +69,7 @@ export function IterationPanel({
         className="iter-text"
         placeholder="or describe it in your words…"
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setText(e.target.value)}
         disabled={busy}
         variants={itemVariants(reduce)}
       />

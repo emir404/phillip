@@ -1,119 +1,77 @@
 # @nutz/dashboard
 
-The nutz team's analytics **app + ingestion backend** for Phillip, built with
-**Next.js** (App Router). Agents `POST` lead, event, and conversation data to its
-API; it **persists** them and renders the funnel, engagement, and full
-conversations in real time.
-
-It reads the **same record and event types the embed emits** (imported as types
-from [`@nutz/phillip`](../../packages/phillip)), so the wire contract is defined
-once and the two stay in lock-step.
+The Phillip **backend + team dashboard**: a Next.js 16 app that serves the embed's entire API
+(boot, LLM chat, iterations, checkout, analytics ingestion) and the UI the team runs the funnel
+from. Persistence is **Turso/libsql via Drizzle** (`src/db/schema.ts`); the team signs in with
+**better-auth** (email/password; every dashboard route is gated by `src/proxy.ts`).
 
 ```bash
-pnpm --filter @nutz/dashboard dev     # dev server on http://localhost:5174
-# or from the repo root:
-pnpm dev:dashboard
+cp .env.example .env.local        # fill in keys
+pnpm db:push                      # create tables (file:.data/phillip.db locally, Turso in prod)
+pnpm db:seed                      # demo leads + team login + settings  (-- --force to reseed)
+pnpm embed                        # build the widget → public/phillip.js
+pnpm dev                          # http://localhost:5174
 ```
 
-## The backend / API
+## The API
 
-All endpoints live under `/v1` (route handlers in `src/app/v1`). The store
-(`src/lib/store.ts`) persists everything.
+Route handlers in `src/app/v1` (+ `src/app/api`). Three access tiers:
 
-| Method & path | Purpose | Body |
+- **Embed-facing** (called cross-origin from lead sites; CORS `*`; the unguessable `prv_`/`ses_`
+  id is the capability)
+- **Key-gated** (server-to-server: build agents; send `x-api-key: $PHILLIP_API_KEY`)
+- **Team** (better-auth session cookie; used by the dashboard UI)
+
+| Method & path | Tier | Purpose |
 | --- | --- | --- |
-| `GET /v1/leads` | All leads (the dashboard polls this) | — |
-| `GET /v1/leads/:id` | One lead (composite) | — |
-| `POST /v1/leads` | Register / update a lead + preview + session | `{ lead, session, preview?, engagementScore? }` |
-| `POST /v1/events` | Ingest a batch of analytics/funnel events | `{ sessionId, events: AnalyticsEvent[] }` |
-| `POST /v1/conversations/:sessionId/messages` | Append conversation messages | `{ messages: Message[], intent?, sentiment? }` |
-| `GET /v1/export` | **The agent feed** — every lead distilled into an agent-ready brief + metrics + heatmap, plus book-wide insights | — |
-| `GET /v1/export?format=ndjson` | Same, one lead per line (stream-friendly for feeding agents in bulk) | — |
-| `GET /v1/leads/:id/export` | The agent-ready brief for a single lead | — |
+| `GET /v1/preview/:id/boot` | embed | Resolve a preview id → `BootConfig` (lead, persona, offer, engagement tuning, fresh session, resumed conversation) |
+| `POST /v1/events` | embed | Ingest analytics batches; auto-advances funnel stage + engagement score |
+| `POST /v1/conversations/:sessionId/messages` | embed | **SSE chat** — Phillip (Claude) streams the reply plus control frames (`intent`, `propose_quick_replies`, `start_iteration`, `escalate`, `open_checkout`) |
+| `POST /v1/iterations` · `GET /v1/iterations/:id` | embed | Create / poll an iteration job (see below) |
+| `POST /v1/escalations` | embed | Record a human-handoff request (email + reason) |
+| `POST /v1/checkout` | embed | Create the Stripe Checkout session → `{ checkoutUrl }` |
+| `POST /v1/previews` · `GET /v1/previews/:id` | key | **Auto mode**: register a generated site → `{ previewId, snippet, embedScriptUrl, leadId }`; attach `files` to enable automated iterations |
+| `POST /v1/ingest/conversations/:sessionId/messages` | key | Push a finished transcript from an external agent |
+| `GET /v1/leads` · `GET /v1/leads/:id` | team | Composite leads (the dashboard polls the list) |
+| `GET /v1/export` (`?format=ndjson`) · `GET /v1/leads/:id/export` | team | **The agent feed** — every lead distilled into metrics + attention heatmap + synthesized brief |
+| `POST /api/stripe/webhook` | Stripe | `checkout.session.completed` → order paid, stage `paid` (source of truth for payment) |
 
-`POST /v1/events` uses the **exact shape the embed already sends**
-(`EventsBatchRequest`), so pointing a live embed's `data-api-base` at this deploy
-persists its behaviour stream. Ingested events advance the lead's funnel stage
-and engagement score automatically. If events arrive for an unknown session, a
-placeholder lead is created so nothing is dropped.
+## Iterations (how a lead's "make it warmer" becomes a deploy)
 
-Quick check:
+`POST /v1/iterations` guards in order — over budget → `queued_manual/budget`; no site source →
+`queued_manual/no_source` (the widget tells the lead the team is on it; the job appears in
+**/iterations** for a human) — otherwise the executor (`src/lib/executor.ts`) runs after the
+response: Claude applies the change set to the lead's `site_files` (tool loop, embed tag and
+`data-section` markers pinned), the result deploys to the lead's Vercel project via the
+deployments API (inline files, auto-creates the project on first deploy), the preview version
+bumps, and the widget's poll flips to `done` with the fresh URL.
 
-```bash
-curl -X POST localhost:5174/v1/events -H 'content-type: application/json' \
-  -d '{"sessionId":"ses_1","events":[{"id":"e1","sessionId":"ses_1","type":"ping_shown","payload":{"reason":"score","score":80},"ts":"2026-07-06T00:00:00Z"}]}'
-```
+Per-lead spend (chat + iterations) lands in `usage_ledger`; the cap
+(`PHILLIP_BUDGET_CAP_USD`, per-lead override on the lead row) gates further iterations and tells
+Phillip to steer to checkout or the team instead.
 
 ## Analytics, heatmap & the agent feed
 
-Three layers turn raw behaviour into something a human — and, more importantly,
-**another agent** — can act on. They're derived in `src/lib/metrics.ts` (pure TS,
-shared by the API and the UI).
+Derived in `src/lib/metrics.ts` (pure TS, shared by API + UI) from the embed's event stream:
+session metrics (active time, scroll depth, section dwell, CTA/gallery/contact interactions),
+the per-section **attention heatmap**, per-message **intent/sentiment**, and the synthesized
+**agent brief** (requested changes, objections, winning/ignored sections, recommended actions).
+`GET /v1/export` serves the whole book as JSON or NDJSON for downstream agents.
 
-- **Analytics** — per session: **time on page** and **active time**, **scroll
-  depth**, sections viewed, clicks / CTA hovers / gallery opens / video plays /
-  contact taps, message counts, iteration rounds, and full **device context**
-  (type, OS, **browser**, viewport), geo, referrer, and returning-visitor flag.
-  The embed rolls these up into a periodic `signals_snapshot` event; the store
-  derives the rest from the raw stream when a snapshot isn't present yet.
-- **Attention heatmap** — per-section **dwell time** (which parts they looked at
-  most), ranked and heat-colored from hot → cool. Sourced from the snapshot's
-  `sections` map, falling back to summing `section_view` dwell.
-- **Agent feed** (`GET /v1/export`) — the important one. Each lead becomes an
-  `AgentFeedItem`: the metrics + heatmap above, the funnel history, the full
-  transcript with intents/sentiment, the order, **and a synthesized `brief`** —
-  verbatim `requestedChanges`, `objections`, `questions`, `winningSections` /
-  `ignoredSections` (from the heatmap), and `recommendedActions` a build agent
-  can apply directly. The response also carries `insights` aggregated across the
-  whole book (top sections, most-requested changes, conversion by industry) so
-  agents can mass-produce better sites, not just rebuild one.
+## Environment
 
-```bash
-curl localhost:5174/v1/export | jq '.leads[0].brief'      # one lead's brief
-curl 'localhost:5174/v1/export?format=ndjson' > feed.ndjson  # bulk, one per line
-```
+See [`.env.example`](.env.example). In short: `TURSO_DATABASE_URL`/`TURSO_AUTH_TOKEN` (DB),
+`BETTER_AUTH_SECRET`/`BETTER_AUTH_URL` (team auth), `ANTHROPIC_API_KEY` +
+`PHILLIP_CHAT_MODEL`/`PHILLIP_EXECUTOR_MODEL` (the agent), `PHILLIP_BUDGET_CAP_USD`,
+`PHILLIP_API_KEY` (auto-mode key), `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`,
+`VERCEL_TOKEN`/`VERCEL_TEAM_ID` (iteration deploys + domain connect), `SEED_ADMIN_PASSWORD`.
 
-In the UI, open any lead to see the **Signals** grid, the **Attention heatmap**,
-and the **Agent brief**, with **Copy agent brief** / **Raw JSON** actions; the
-top bar exports the whole book as JSON or NDJSON.
+`PHILLIP_DEPLOY_MODE=off` makes the executor apply + persist edits without deploying
+(local testing without a Vercel token; the iteration says so via `statusReason`).
 
-## Data & persistence
+## Deploy (Vercel)
 
-- The store keeps everything in memory (fast reads) and **write-through-persists
-  to a JSON file** (`.data/phillip.json` by default; set `PHILLIP_DATA_FILE` to
-  relocate — e.g. a mounted volume). A fresh deploy is **seeded** with sample
-  leads (`src/lib/seed-data.ts`) so it shows data immediately.
-- If the filesystem isn't writable (some serverless runtimes), it degrades to
-  memory-only — the API still works, it just won't persist across cold starts.
-- `src/lib/store.ts` is the single seam: swap it for Postgres/Prisma (or any DB)
-  without touching the UI or API handlers.
-
-## Deploy
-
-**Any Node host / container (persistent disk — recommended):**
-
-```bash
-docker build -t phillip-dashboard .            # from the repo root
-docker run -p 5174:5174 -v phillip-data:/data phillip-dashboard
-```
-
-Or without Docker, on a VM/Render/Railway/Fly:
-
-```bash
-pnpm install && pnpm --filter @nutz/dashboard build
-PHILLIP_DATA_FILE=/var/lib/phillip/phillip.json pnpm --filter @nutz/dashboard start
-```
-
-**Vercel / serverless:** deploys as-is and the API runs, but the filesystem is
-ephemeral, so for durable storage point the store at a hosted DB (swap
-`src/lib/store.ts`). Everything else works unchanged.
-
-## UI
-
-KPIs, a conversion funnel with step-to-step rates, the leads table, and a
-lead-detail drawer (engagement gauge, session context, **Signals** grid,
-**Attention heatmap**, **Agent brief**, transcript, and event timeline).
-Server-rendered from the store on first paint, then kept live by polling
-`/v1/leads`. Motion uses the same "seamless" language as the embed — every
-element enters with blur + opacity + position and everything staggers
-(`src/motion.ts`).
+Project root directory `apps/dashboard`; the build script compiles the embed and copies it to
+`public/phillip.js` automatically. Create the DB with `turso db create phillip`, set the env
+vars, run `db:push`/`db:seed` locally against the Turso URL, and add the Stripe webhook
+(`checkout.session.completed` → `/api/stripe/webhook`).

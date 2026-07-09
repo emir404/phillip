@@ -5,13 +5,14 @@
 //
 // Animation note: enter/exit motion lives in the components via the `motion`
 // library (see src/overlay/motion.ts) so it stays interruptible. CSS keeps only
-// genuinely ambient loops (the indeterminate spinner) plus static styling.
+// genuinely ambient loops (the indeterminate spinner, the launcher's idle
+// breathe) plus static styling.
 //
 // Layout note: there is no chat "box". The conversation is a FRAMELESS stack of
 // iMessage bubbles floating over the bottom-right vignette. Bubbles carry their
-// own soft shadow so they read on any backdrop; the tail is a self-contained
-// SVG (BubbleTail) tinted to the bubble color, so it works without a solid
-// surface behind it.
+// own soft shadow so they read on any backdrop; the tail is a mask-shaped span
+// painting the bubble's own background, so it works without a solid surface
+// behind it and can share the transcript-wide gradient field (see .msg-tail).
 
 export const styles = `
 :host { all: initial; }
@@ -35,11 +36,17 @@ export const styles = `
   --p-soft: #f4f4f5;
   --p-pop: #ff4d8d;
 
-  /* iMessage-shaped bubbles, monochrome brand (not iMessage blue). Values
-     mirror the imessage-simulator: received #e9e9ea, ~18px radius. */
+  /* Brand blue — the sent-bubble gradient and every affirmative control.
+     Shared with the takeover rail and the dashboard (one visual family). */
+  --p-brand-a: #4ebaff;
+  --p-brand-b: #0088ff;
+  --p-brand-grad: linear-gradient(180deg, var(--p-brand-a), var(--p-brand-b));
+
+  /* iMessage-shaped bubbles per the Figma spec: received #e9e9ea, sent brand
+     gradient, 20px radius. */
   --p-them-bg: #e9e9ea;
   --p-them-fg: #000000;
-  --p-bubble-radius: 18px;
+  --p-bubble-radius: 20px;
 
   /* Frosted surfaces (composer, chips, sub-flow cards) — matches the repo's
      --ios-glass and its soft pill shadow. */
@@ -68,60 +75,70 @@ export const styles = `
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
-.phillip-root *, .phillip-root *::before, .phillip-root *::after { box-sizing: border-box; }
+.phillip-root *, .phillip-root *::before, .phillip-root *::after { box-sizing: border-box; border-width: 0; border-style: solid; }
 
 /* Tabular figures for any value that changes in place (no width jitter). */
 .tnum { font-variant-numeric: tabular-nums; }
 
-/* --- vignette (frosted corner backdrop) --- */
-/* Blurs AND dims the page behind the conversation, feathered to the bottom-
-   right corner. A dense radial core (anchored at 100% 100%) falls off smoothly
-   over a faint global tint, so the corner reads deep and premium while the rest
-   of the page just softly recedes — the page goes out of focus, never muddy. */
+/* --- ambient glow (the conversation's backdrop) --- */
+/* Per the Figma: no dark wash and no live blur — a single deep-blue glow
+   blooms behind the transcript column and dissolves well before mid-page;
+   the rest of the site is untouched (transcript legibility comes from the
+   scroller's own top fade). The "300px blur" in the design is pre-computed
+   here as a radial gradient (zero per-frame cost; never a live filter). */
 .vignette {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: var(--p-z-vignette);
   background:
-    radial-gradient(92% 92% at 100% 100%,
-      rgba(6,6,10,.64) 0%,
-      rgba(6,6,10,.46) 24%,
-      rgba(6,6,10,.22) 46%,
-      transparent 66%),
-    rgba(8,8,12,.16);
-  backdrop-filter: blur(20px) saturate(1.08);
-  -webkit-backdrop-filter: blur(20px) saturate(1.08);
-  -webkit-mask-image: radial-gradient(145% 145% at 100% 100%,
-    #000 0%, #000 40%, rgba(0,0,0,.62) 56%, transparent 74%);
-  mask-image: radial-gradient(145% 145% at 100% 100%,
-    #000 0%, #000 40%, rgba(0,0,0,.62) 56%, transparent 74%);
+    radial-gradient(480px 560px at calc(100% - 190px) calc(100% - 210px),
+      rgba(5,77,140,.30) 0%,
+      rgba(5,77,140,.16) 42%,
+      rgba(5,77,140,.06) 62%,
+      transparent 72%);
+  -webkit-mask-image: radial-gradient(120% 120% at 100% 100%,
+    #000 0%, #000 30%, rgba(0,0,0,.5) 48%, transparent 62%);
+  mask-image: radial-gradient(120% 120% at 100% 100%,
+    #000 0%, #000 30%, rgba(0,0,0,.5) 48%, transparent 62%);
 }
 
 /* --- resting bubble (closed) --- */
+/* The photo IS the button — no dark plate behind it. The neutral background
+   only covers the flash before the avatar loads. */
 .bubble {
   position: fixed;
   right: 20px;
   bottom: 20px;
   z-index: var(--p-z-bubble);
-  width: 60px;
-  height: 60px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   border: none;
   padding: 0;
   cursor: pointer;
-  background: var(--p-accent);
-  box-shadow: var(--p-shadow);
+  background: #e5e5e5;
+  box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 12px 32px -8px rgba(0,0,0,.28);
+  transition: box-shadow .3s;
   overflow: visible;
 }
+.bubble:hover { box-shadow: 0 2px 4px rgba(0,0,0,.08), 0 16px 40px -8px rgba(0,0,0,.34); }
+/* Breathing idle loop lives on the INNER img, never the button: motion drives
+   the button's inline transform (hover/tap springs) and a CSS transform
+   animation there would fight it. */
 .bubble img {
   width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block;
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.06);
+  animation: p-breathe 4.5s ease-in-out 2s infinite;
+}
+@keyframes p-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.025); }
 }
 .bubble-badge {
   position: absolute;
-  top: 0; right: 0;
-  width: 14px; height: 14px;
+  top: -1px; right: -1px;
+  width: 12px; height: 12px;
   background: var(--p-pop);
   border: 2px solid #fff;
   border-radius: 50%;
@@ -130,12 +147,12 @@ export const styles = `
 /* Always-on "online" presence — a live person, not a dormant chat icon. */
 .bubble-status {
   position: absolute;
-  right: 2px; bottom: 2px;
-  width: 13px; height: 13px;
+  right: 1px; bottom: 1px;
+  width: 11px; height: 11px;
   border-radius: 50%;
-  background: #22c55e;
-  border: 2.5px solid #fff;
-  box-shadow: 0 1px 2px rgba(0,0,0,.3);
+  background: #30d158;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,.25);
 }
 
 /* --- shared avatar photo --- */
@@ -167,20 +184,21 @@ export const styles = `
   display: flex; align-items: center; gap: 10px;
   text-align: left;
   border: none; cursor: pointer; font-family: inherit;
-  padding: 9px 13px 9px 10px;
-  border-radius: 18px;
+  padding: 10px 12px 10px 10px;
+  border-radius: 16px;
   background: var(--p-glass);
   backdrop-filter: blur(var(--p-glass-blur)) saturate(1.6);
   -webkit-backdrop-filter: blur(var(--p-glass-blur)) saturate(1.6);
-  box-shadow: var(--p-shadow), var(--p-glass-ring);
+  /* Same layered shadow family as the launcher, plus the glass ring. */
+  box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 12px 32px -8px rgba(0,0,0,.28), var(--p-glass-ring);
 }
 .nudge-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .nudge-head { display: flex; align-items: center; gap: 7px; }
-.nudge-name { font-weight: 650; font-size: 13px; color: var(--p-fg); }
-.nudge-live { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #16a34a; font-weight: 600; }
+.nudge-name { font-weight: 600; font-size: 12.5px; color: var(--p-fg); }
+.nudge-live { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #0ea54b; font-weight: 600; }
 .nudge-live-dot {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.18);
+  width: 5px; height: 5px; border-radius: 50%;
+  background: #30d158; box-shadow: 0 0 0 3px rgba(48,209,88,.18);
 }
 .nudge-msg { font-size: 13px; line-height: 1.35; color: var(--p-fg); text-wrap: pretty; }
 .nudge-dismiss {
@@ -199,11 +217,11 @@ export const styles = `
 /* --- frameless stage (open) --- */
 .stage {
   position: fixed;
-  right: 20px;
-  bottom: 20px;
+  right: 32px;
+  bottom: 28px;
   z-index: var(--p-z-stage);
-  width: min(384px, calc(100vw - 32px));
-  max-height: min(78vh, 660px);
+  width: min(420px, calc(100vw - 40px));
+  max-height: min(78vh, 680px);
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -242,50 +260,96 @@ export const styles = `
 .stage-footer { pointer-events: auto; margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
 
 /* --- transcript --- */
-/* Tight within a run; the gap between runs comes from the tail row's reserved
-   space (.has-tail), mirroring iMessage's grouping rhythm. */
-.convo { display: flex; flex-direction: column; gap: 2px; }
+/* Figma rhythm: 4.5px between grouped bubbles; the run gap comes from the tail
+   row's reserved space (.has-tail), mirroring iMessage's grouping. */
+.convo { display: flex; flex-direction: column; gap: 4px; }
 
-/* --- messages (frameless iMessage bubbles, ported 1:1 from the simulator) --- */
+/* --- messages (frameless iMessage bubbles, metrics from Figma 1:28) --- */
 .msg { display: flex; max-width: 100%; }
 .msg.lead { justify-content: flex-end; }
 .msg.system { justify-content: center; }
 /* Tail hangs ~6.5px below the bubble; reserve that space + the run gap. */
 .msg.has-tail { margin-bottom: 7px; }
-.msg-bubble-wrap { position: relative; max-width: 70%; display: flex; }
+.msg-bubble-wrap { position: relative; max-width: min(315px, 84%); display: flex; }
 .msg-bubble {
   position: relative;
-  padding: 8.5px 11.5px;
+  padding: 10px 13.5px;
   border-radius: var(--p-bubble-radius);
-  font-size: 16px;
-  line-height: 1.295;
-  letter-spacing: -.005em;
+  font-size: 18px;
+  line-height: 1.29;
+  letter-spacing: -.008em;
   white-space: pre-wrap;
   word-wrap: break-word;
   text-wrap: pretty;
   box-shadow: 0 1px 2px rgba(0,0,0,.12), 0 6px 16px -8px rgba(0,0,0,.3);
 }
 .msg.phillip .msg-bubble { background: var(--p-them-bg); color: var(--p-them-fg); }
-/* The sent bubble stays brand-black; a faint light edge keeps its silhouette
-   readable where it sits on the darkest part of the backdrop. */
+/* The sent bubble is the brand gradient (iMessage blue, ours). Fallback mode
+   (no JS sampling): the gradient lands on solid brand-b at calc(100% - 10.5px)
+   — exactly where the tail's top edge starts (17px tall, hanging 6.5px below)
+   — so the solid-brand-b tail meets solid color and the seam vanishes. */
 .msg.lead .msg-bubble {
-  background: var(--p-accent); color: var(--p-accent-fg);
-  box-shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 16px -8px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.08);
+  background-color: var(--p-brand-b);
+  background-image: linear-gradient(180deg, var(--p-brand-a), var(--p-brand-b) calc(100% - 10.5px));
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(0,60,120,.28), 0 8px 20px -10px rgba(0,110,220,.45);
 }
 
-/* Self-contained SVG tail (last bubble of a run only). Rendered INSIDE the
-   bubble: hangs below (bottom:-6.5px) and insets 6.5px from the edge, exactly
-   like the simulator. currentColor = bubble color; them is mirrored. */
-.msg-tail { position: absolute; bottom: -6.5px; width: 16px; height: 17px; }
-.msg.phillip .msg-tail { left: 6.5px; transform: scaleX(-1); color: var(--p-them-bg); }
-.msg.lead .msg-tail { right: 6.5px; color: var(--p-accent); }
+/* A bubble that goes somewhere ("done — tap to see it"): whole-bubble tap. */
+.msg-bubble.linked {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: filter .14s ease, transform .14s ease;
+}
+.msg-bubble.linked:hover { filter: brightness(1.03); }
+.msg-bubble.linked:active { transform: scale(.98); }
+
+/* Mask-shaped tail (last bubble of a run only). Rendered INSIDE the bubble:
+   hangs below (bottom:-6.5px) and insets 6.5px from the edge, exactly like
+   the simulator. The span paints a plain background clipped by the BubbleTail
+   SVG path (same path data as ui/icons.tsx) — a background, not a glyph, so
+   field mode below can position one shared gradient across bubble AND tail
+   with no seam; them is mirrored. */
+.msg-tail {
+  position: absolute;
+  bottom: -6.5px;
+  width: 16px;
+  height: 17px;
+  pointer-events: none;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 18' preserveAspectRatio='none'%3E%3Cpath d='M1.8 11C2.79 11 3.44 11.31 4.77 12.24C5.48 12.74 8.22 14.84 10.49 16.09C12.45 17.17 14.13 17.91 14.55 17.94C15.81 18.04 15.97 16.85 15.48 16.21C14.99 15.57 14.43 14.74 14.21 14.29C13.73 13.28 13.58 12.75 13.58 11.24C13.58 9.38 14.9 8 15.94 7.08C16.03 7 16.15 6.9 16.29 6.79C16.53 6.6 16.76 6.41 16.99 6.22V0H0V11H1.8Z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 18' preserveAspectRatio='none'%3E%3Cpath d='M1.8 11C2.79 11 3.44 11.31 4.77 12.24C5.48 12.74 8.22 14.84 10.49 16.09C12.45 17.17 14.13 17.91 14.55 17.94C15.81 18.04 15.97 16.85 15.48 16.21C14.99 15.57 14.43 14.74 14.21 14.29C13.73 13.28 13.58 12.75 13.58 11.24C13.58 9.38 14.9 8 15.94 7.08C16.03 7 16.15 6.9 16.29 6.79C16.53 6.6 16.76 6.41 16.99 6.22V0H0V11H1.8Z'/%3E%3C/svg%3E");
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+.msg.phillip .msg-tail { left: 6.5px; transform: scaleX(-1); background: var(--p-them-bg); }
+.msg.lead .msg-tail { right: 6.5px; background: var(--p-brand-b); }
+
+/* Field mode (the iMessage effect) — useBubbleGradientField measures the
+   scroller and every sent bubble/tail, then stretches ONE brand gradient
+   across the whole transcript viewport: --p-grad-h is the viewport height,
+   --p-grad-y each element's (clamped) offset within it. Bubble and tail
+   sample the same image, so the pair is seamless and the blue deepens as
+   bubbles sit lower on screen. Without .grad-on (jsdom, hidden, pre-measure)
+   the static per-bubble fallback above stays in effect. */
+.convo.grad-on .msg.lead .msg-bubble,
+.convo.grad-on .msg.lead .msg-tail {
+  background-color: var(--p-brand-b);
+  background-image: var(--p-brand-grad);
+  background-repeat: no-repeat;
+  background-size: 100% var(--p-grad-h, 100%);
+  background-position: 0 var(--p-grad-y, 0px);
+}
 
 .msg.system .msg-bubble {
   background: transparent; color: var(--p-muted); font-size: 12px;
   text-align: center; box-shadow: none;
 }
 .msg-bubble.error { background: #fee2e2; color: #b91c1c; }
-.msg-bubble.error .msg-tail { color: #fee2e2; }
+.msg-bubble.error .msg-tail { background: #fee2e2; }
 
 /* --- typing --- */
 .typing {
@@ -321,13 +385,14 @@ export const styles = `
 }
 .composer input {
   flex: 1; border: none; background: transparent; outline: none;
-  padding: 6px 0; font-size: 14px; font-family: inherit; color: var(--p-fg);
+  padding: 6px 0; font-size: 15px; font-family: inherit; color: var(--p-fg);
 }
 .composer input::placeholder { color: var(--p-muted); }
 .composer button {
   border: none; border-radius: 50%; width: 36px; height: 36px; flex: none;
-  background: var(--p-accent); color: var(--p-accent-fg); cursor: pointer;
+  background: var(--p-brand-grad); color: #ffffff; cursor: pointer;
   display: grid; place-items: center;
+  box-shadow: 0 1px 3px rgba(0,90,180,.35);
   transition: opacity .14s ease, transform .14s ease, filter .14s ease;
 }
 .composer button:disabled { opacity: .35; cursor: default; filter: blur(.2px); transform: scale(.92); }
@@ -349,7 +414,7 @@ export const styles = `
   transition: background .12s ease, border-color .12s ease;
 }
 .iter-chip:hover { background: #fff; }
-.iter-chip.selected { background: var(--p-accent); color: var(--p-accent-fg); border-color: var(--p-accent); }
+.iter-chip.selected { background: var(--p-brand-grad); color: #ffffff; border-color: transparent; }
 .iter-text {
   border: 1px solid rgba(0,0,0,.1); border-radius: 14px; padding: 10px 13px;
   font-size: 14px; font-family: inherit; resize: none; min-height: 60px; outline: none;
@@ -360,7 +425,8 @@ export const styles = `
 .iter-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .iter-submit {
   border: none; border-radius: 999px; padding: 9px 17px; font-size: 13px; font-weight: 600;
-  background: var(--p-accent); color: var(--p-accent-fg); cursor: pointer; font-family: inherit;
+  background: var(--p-brand-grad); color: #ffffff; cursor: pointer; font-family: inherit;
+  box-shadow: 0 1px 3px rgba(0,90,180,.35);
 }
 .iter-submit:disabled { opacity: .4; cursor: default; }
 
@@ -394,10 +460,12 @@ export const styles = `
 .setup-step { display: flex; align-items: center; gap: 9px; font-size: 13px; cursor: pointer; }
 .setup-step input { accent-color: var(--p-accent); width: 16px; height: 16px; }
 
-/* The spinner is the one genuine CSS loop; motion handles the rest and honors
-   reduced-motion via MotionConfig at the root. */
+/* The spinner and the launcher's idle breathe are the only genuine CSS loops;
+   motion handles the rest and honors reduced-motion via MotionConfig at the
+   root. */
 @media (prefers-reduced-motion: reduce) {
   .spinner { animation: none; }
+  .bubble img { animation: none; }
   .stage { will-change: auto; }
 }
 `;
