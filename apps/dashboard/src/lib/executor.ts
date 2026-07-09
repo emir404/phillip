@@ -185,6 +185,18 @@ function vercelUrl(path: string): string {
   return `${VERCEL_API}${path}${teamId ? `${path.includes("?") ? "&" : "?"}teamId=${teamId}` : ""}`;
 }
 
+/** Tear down a lead's preview project (lead deletion). Best-effort — a
+ *  missing token or an already-gone project is not an error. */
+export async function deleteVercelProject(project: string): Promise<boolean> {
+  const token = vercelToken();
+  if (!token) return false;
+  const res = await fetch(vercelUrl(`/v9/projects/${project}`), {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  return res.ok || res.status === 404;
+}
+
 async function deployToVercel(
   projectName: string,
   files: Map<string, string>,

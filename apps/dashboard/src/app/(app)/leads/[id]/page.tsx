@@ -5,11 +5,13 @@ import { EventTimeline } from "@/components/event-timeline";
 import { Heatmap } from "@/components/heatmap";
 import { IterationStatusBadge, statusReasonLabel } from "@/components/iteration-status-badge";
 import { ConnectDomainForm } from "@/components/lead/connect-domain-form";
+import { DeleteLeadButton } from "@/components/lead/delete-lead-button";
 import { MakeLiveSwitch } from "@/components/lead/make-live-switch";
 import {
   MarkEscalationHandledButton,
   MarkIterationDoneButton,
 } from "@/components/lead/row-actions";
+import { TestModeSwitch } from "@/components/lead/test-mode-switch";
 import { ScoreRing } from "@/components/score-ring";
 import { Signals } from "@/components/signals";
 import { StageBadge } from "@/components/stage-badge";
@@ -344,9 +346,37 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
                 <MakeLiveSwitch leadId={dl.lead.id} isLive={isLive} orderPaid={orderPaid} />
               </div>
               <Separator />
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Test mode</p>
+                  <p className="text-xs text-muted-foreground">
+                    {dl.lead.testMode
+                      ? "Checkout runs on Stripe test keys — 4242 card, no real money."
+                      : "Flip on to rehearse the purchase without charging."}
+                  </p>
+                </div>
+                <TestModeSwitch leadId={dl.lead.id} testMode={dl.lead.testMode ?? false} />
+              </div>
+              <Separator />
               <div>
                 <p className="mb-2 text-sm font-medium">Connect domain</p>
                 <ConnectDomainForm leadId={dl.lead.id} />
+              </div>
+              <Separator />
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Delete lead</p>
+                  <p className="text-xs text-muted-foreground">
+                    Erases everything and takes the preview offline. No undo.
+                  </p>
+                </div>
+                <DeleteLeadButton
+                  leadId={dl.lead.id}
+                  business={dl.lead.business}
+                  paidProtected={
+                    (dl.lead.stage === "paid" || dl.lead.stage === "live") && !dl.lead.testMode
+                  }
+                />
               </div>
             </CardContent>
           </Card>

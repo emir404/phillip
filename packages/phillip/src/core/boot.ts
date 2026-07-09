@@ -10,6 +10,9 @@ export async function bootEmbed(previewId: string, client: TransportClient): Pro
   log.debug("visitor", visitor);
 
   const config = await client.boot(previewId);
+  // Paid/live leads get a slim silent payload — nothing to fold in, and no
+  // session to touch.
+  if (config.silent) return config;
 
   return {
     ...config,

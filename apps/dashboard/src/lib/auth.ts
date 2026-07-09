@@ -11,7 +11,8 @@ const trustedOrigins = [
   "http://localhost:5174",
   "http://127.0.0.1:5174",
   process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`,
-  process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`,
+  process.env.VERCEL_PROJECT_PRODUCTION_URL &&
+    `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`,
 ].filter((origin): origin is string => Boolean(origin));
 
 // Team-only auth: email/password for the two founders. Leads never log in —

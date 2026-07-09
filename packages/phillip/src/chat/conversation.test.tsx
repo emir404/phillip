@@ -206,5 +206,9 @@ describe("conversation flow", () => {
     // …and the transcript starts with the agent, not the lead.
     const first = shadow.querySelector(".msg");
     expect(first?.classList.contains("phillip")).toBe(true);
+    // A resumed thread whose last word was Phillip's still greets with the
+    // reaction chips (they vanished in prod when boot began attaching a
+    // conversation to every session — regression guard).
+    expect(shadow.querySelectorAll(".qr").length).toBeGreaterThan(0);
   });
 });

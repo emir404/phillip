@@ -244,20 +244,33 @@ export const styles = `
   -webkit-backdrop-filter: blur(var(--p-glass-blur)) saturate(1.6);
   box-shadow: var(--p-shadow-sm), var(--p-glass-ring);
   display: grid; place-items: center;
+  transition: box-shadow .18s ease, color .18s ease;
 }
+.stage-close:hover { box-shadow: var(--p-shadow), var(--p-glass-ring); }
 .stage-scroll {
   pointer-events: auto;
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   scroll-behavior: smooth;
-  padding-top: 16px;
-  /* Older messages dissolve into the page at the top — fade over the top
-     quarter, matching the repo's transcript mask exactly. */
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 25%);
-  mask-image: linear-gradient(to bottom, transparent 0%, #000 25%);
+  /* The scroll clip would shear off bubble shadows (and the hanging tail) at
+     the column edges — bleed the clip box 12px past the stage on both sides
+     and pad the same amount back, so shadows breathe while bubbles stay
+     aligned with the composer. */
+  margin: 0 -12px;
+  padding: 16px 12px 12px;
+  /* At rest only a whisper of a fade (hides the clip line); once content
+     scrolls behind the top edge (.scrolled, toggled in Stage) the dissolve
+     deepens. Pixel-based so it never scales with the column and swallows the
+     first message. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 8px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 8px);
 }
-.stage-footer { pointer-events: auto; margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.stage-scroll.scrolled {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 88px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 88px);
+}
+.stage-footer { pointer-events: auto; margin-top: 2px; display: flex; flex-direction: column; gap: 8px; }
 
 /* --- transcript --- */
 /* Figma rhythm: 4.5px between grouped bubbles; the run gap comes from the tail
@@ -357,7 +370,16 @@ export const styles = `
   background: var(--p-them-bg); border-radius: var(--p-bubble-radius);
   box-shadow: 0 1px 2px rgba(0,0,0,.12), 0 6px 16px -8px rgba(0,0,0,.3);
 }
-.typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--p-muted); display: block; }
+.typing span {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--p-muted); display: block;
+  animation: p-typing 1.2s ease-in-out infinite;
+}
+.typing span:nth-child(2) { animation-delay: .15s; }
+.typing span:nth-child(3) { animation-delay: .3s; }
+@keyframes p-typing {
+  0%, 60%, 100% { opacity: .35; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
 
 /* --- quick replies (floating glass chips) --- */
 .quick-replies { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
@@ -382,6 +404,10 @@ export const styles = `
   -webkit-backdrop-filter: blur(var(--p-glass-blur)) saturate(1.6);
   border-radius: 999px;
   box-shadow: var(--p-shadow-sm), var(--p-glass-ring);
+  transition: box-shadow .18s ease;
+}
+.composer:focus-within {
+  box-shadow: var(--p-shadow-sm), var(--p-glass-ring), 0 0 0 3px rgba(0,136,255,.14);
 }
 .composer input {
   flex: 1; border: none; background: transparent; outline: none;
@@ -396,6 +422,8 @@ export const styles = `
   transition: opacity .14s ease, transform .14s ease, filter .14s ease;
 }
 .composer button:disabled { opacity: .35; cursor: default; filter: blur(.2px); transform: scale(.92); }
+.composer button:not(:disabled):hover { filter: brightness(1.07); }
+.composer button:not(:disabled):active { transform: scale(.93); }
 
 /* --- sub-flow glass card (iteration / checkout / escalation / setup) --- */
 .stage-card {
@@ -466,6 +494,7 @@ export const styles = `
 @media (prefers-reduced-motion: reduce) {
   .spinner { animation: none; }
   .bubble img { animation: none; }
+  .typing span { animation: none; opacity: .6; }
   .stage { will-change: auto; }
 }
 `;

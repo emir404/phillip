@@ -55,6 +55,8 @@ export function PhillipWidget({ runtime, client }: PhillipWidgetProps) {
     log.error("boot failed", boot.error);
     return null;
   }
+  // Paid/live lead: the preview experience is over — mount nothing.
+  if (boot.config.silent) return null;
   return <Ready runtime={runtime} client={client} config={boot.config} />;
 }
 

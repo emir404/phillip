@@ -20,6 +20,8 @@ export interface Lead {
   email?: string;
   source: string;
   stage: LeadStage;
+  /** Checkout runs on Stripe test keys — purchase rehearsals, no real money. */
+  testMode?: boolean;
 }
 
 export type PreviewStatus = "draft" | "live" | "superseded";

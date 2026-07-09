@@ -102,6 +102,7 @@ function toLead(r: LeadRow): Lead {
     email: orUndef(r.email),
     source: r.source,
     stage: r.stage,
+    testMode: r.testMode,
   };
 }
 
@@ -922,6 +923,30 @@ export const DEFAULT_PERSONA: PersonaSettings = {
   title: "founder · nutz",
   avatarUrl: "/phillip.jpg",
 };
+
+/** Remove a lead and every trace of it — previews, sessions, events, the
+ *  conversation + messages, iterations, orders, escalations, site files, and
+ *  usage. Irreversible; callers gate paid/live leads. */
+export async function deleteLead(leadId: string): Promise<void> {
+  const convRows = await db
+    .select({ id: conversations.id })
+    .from(conversations)
+    .where(eq(conversations.leadId, leadId));
+  const convIds = convRows.map((c) => c.id);
+  if (convIds.length > 0) {
+    await db.delete(messages).where(inArray(messages.conversationId, convIds));
+  }
+  await db.delete(conversations).where(eq(conversations.leadId, leadId));
+  await db.delete(events).where(eq(events.leadId, leadId));
+  await db.delete(visitorSessions).where(eq(visitorSessions.leadId, leadId));
+  await db.delete(iterations).where(eq(iterations.leadId, leadId));
+  await db.delete(orders).where(eq(orders.leadId, leadId));
+  await db.delete(escalations).where(eq(escalations.leadId, leadId));
+  await db.delete(siteFiles).where(eq(siteFiles.leadId, leadId));
+  await db.delete(usageLedger).where(eq(usageLedger.leadId, leadId));
+  await db.delete(previews).where(eq(previews.leadId, leadId));
+  await db.delete(leads).where(eq(leads.id, leadId));
+}
 
 export async function getSetting<T>(key: string, fallback: T): Promise<T> {
   const [row] = await db.select().from(settings).where(eq(settings.key, key));

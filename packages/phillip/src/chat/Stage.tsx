@@ -17,6 +17,13 @@ import { Close } from "../ui/icons";
 //
 // `footerKey` lets the footer cross-fade (blur + stagger) as the active flow
 // swaps — chat → iteration → checkout → setup all animate seamlessly.
+// The top fade only exists once content actually scrolls behind it — at the
+// very top the first message must be fully readable, so the stronger mask is
+// gated behind a `.scrolled` class.
+const toggleScrolled = (el: HTMLElement) => {
+  el.classList.toggle("scrolled", el.scrollTop > 8);
+};
+
 export function Stage({
   persona,
   onClose,
@@ -59,7 +66,9 @@ export function Stage({
       >
         <Close size={15} />
       </m.button>
-      <div className="stage-scroll">{children}</div>
+      <div className="stage-scroll" onScroll={(e) => toggleScrolled(e.currentTarget)}>
+        {children}
+      </div>
       {footer ? (
         <div className="stage-footer">
           <AnimatePresence mode="wait" initial={false}>

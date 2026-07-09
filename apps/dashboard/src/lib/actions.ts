@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { deleteVercelProject } from "./executor";
 import { createLeadWithPreview } from "./previews";
 import {
   DEFAULT_PERSONA,
@@ -8,6 +9,7 @@ import {
   type PersonaSettings,
   type PricingSettings,
   advanceLeadStage,
+  deleteLead,
   getIteration,
   getLead,
   getLeadRow,
@@ -15,6 +17,7 @@ import {
   setSetting,
   updateEscalation,
   updateIteration,
+  updateLeadFields,
   updatePreview,
 } from "./store";
 
@@ -126,6 +129,43 @@ export async function revealApiKeyAction(): Promise<ActionResult<{ key: string }
   const key = process.env.PHILLIP_API_KEY;
   if (!key) return { ok: false, error: "PHILLIP_API_KEY is not configured." };
   return { ok: true, key };
+}
+
+// Deleting a lead erases everything about it — analytics, conversation,
+// orders — and tears down the preview deployment. Real paying customers are
+// protected; a paid TEST lead (rehearsals) can always go.
+export async function deleteLeadAction(leadId: string): Promise<ActionResult> {
+  try {
+    const lead = await getLeadRow(leadId);
+    if (!lead) return { ok: false, error: "Lead not found." };
+    if ((lead.stage === "paid" || lead.stage === "live") && !lead.testMode) {
+      return { ok: false, error: "This lead has paid — real customers can't be deleted." };
+    }
+    if (lead.vercelProjectId) {
+      await deleteVercelProject(lead.vercelProjectId).catch(() => false);
+    }
+    await deleteLead(leadId);
+    revalidatePath("/");
+    revalidatePath("/leads");
+    return { ok: true };
+  } catch (err) {
+    return fail(err, "Could not delete the lead.");
+  }
+}
+
+// Purchase rehearsals: a test-mode lead checks out against Stripe's test keys
+// (4242… card, no real money) — same funnel, same webhook, same go-silent.
+export async function setTestModeAction(leadId: string, on: boolean): Promise<ActionResult> {
+  try {
+    const lead = await getLeadRow(leadId);
+    if (!lead) return { ok: false, error: "Lead not found." };
+    await updateLeadFields(leadId, { testMode: on });
+    revalidatePath(`/leads/${leadId}`);
+    revalidatePath("/");
+    return { ok: true };
+  } catch (err) {
+    return fail(err, "Could not update test mode.");
+  }
 }
 
 // --- go-live -------------------------------------------------------------------

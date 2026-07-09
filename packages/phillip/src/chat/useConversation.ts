@@ -62,9 +62,15 @@ export function useConversation(opts: UseConversationOptions): ConversationApi {
     return initial[0]?.role === "phillip" ? initial : [greeting(persona, business), ...initial];
   });
   const [streaming, setStreaming] = useState(false);
-  const [quickReplies, setQuickReplies] = useState<QuickReply[]>(() =>
-    opts.initial ? [] : REACTION_QUICK_REPLIES,
-  );
+  // The three reaction doors greet every open — fresh, greeting-seeded, and
+  // resumed threads alike. Only a thread left mid-turn (the lead's message is
+  // still unanswered) opens without them; each send clears them and the server
+  // proposes the next set.
+  const [quickReplies, setQuickReplies] = useState<QuickReply[]>(() => {
+    const initial = opts.initial?.messages ?? [];
+    const last = initial[initial.length - 1];
+    return !last || last.role === "phillip" ? REACTION_QUICK_REPLIES : [];
+  });
 
   const streamingRef = useRef(false);
   const lastReqRef = useRef<SendMessageRequest | null>(null);

@@ -44,7 +44,8 @@ export async function POST(req: Request) {
 
   let checkout: Awaited<ReturnType<ReturnType<typeof stripe>["checkout"]["sessions"]["create"]>>;
   try {
-    checkout = await stripe().checkout.sessions.create({
+    // Test-mode leads rehearse the full purchase on Stripe's test keys.
+    checkout = await stripe(lead.testMode ? "test" : "live").checkout.sessions.create({
       mode: "subscription",
       line_items: [
         {

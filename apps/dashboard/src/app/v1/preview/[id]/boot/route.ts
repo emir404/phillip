@@ -35,6 +35,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!found) return corsJson({ error: "unknown preview" }, { status: 404 });
   const { lead, preview } = found;
 
+  // Once the lead has paid, the preview experience is over — the site is
+  // theirs. A silent boot mounts nothing: no bubble, no tracker, no session.
+  if (lead.stage === "paid" || lead.stage === "live") {
+    return corsJson({ previewId: preview.id, silent: true });
+  }
+
   const origin = new URL(req.url).origin;
   const [persona, pricing, includes] = await Promise.all([
     getSetting<PersonaSettings>("persona", DEFAULT_PERSONA),

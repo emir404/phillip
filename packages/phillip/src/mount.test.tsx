@@ -1,5 +1,7 @@
 import { render, waitFor } from "@testing-library/react";
+import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
+import { server } from "../mock/server";
 import { Phillip } from "./index";
 import { isInsidePhillipFrame, mount } from "./mount";
 
@@ -29,6 +31,28 @@ describe("mount", () => {
     await waitFor(() => {
       expect(document.querySelector("[data-phillip-host]")).toBeNull();
     });
+  });
+
+  // A paid/live lead gets a silent boot — the sales overlay must never mount
+  // on a site that already belongs to its owner.
+  it("mounts nothing when boot says silent (lead already paid)", async () => {
+    server.use(
+      http.get("*/v1/preview/:id/boot", ({ params }) =>
+        HttpResponse.json({ previewId: String(params.id), silent: true }),
+      ),
+    );
+    render(<Phillip previewId="prv_paid" apiBase="" />);
+
+    const host = await waitFor(() => {
+      const h = document.querySelector<HTMLElement>("[data-phillip-host]");
+      if (!h) throw new Error("host not attached yet");
+      return h;
+    });
+    // Give the boot fetch a beat to resolve, then assert emptiness sticks.
+    await new Promise((r) => setTimeout(r, 150));
+    expect(host.shadowRoot?.querySelector(".bubble")).toBeNull();
+    expect(host.shadowRoot?.querySelector(".stage")).toBeNull();
+    expect(host.shadowRoot?.querySelector(".nudge")).toBeNull();
   });
 
   // The takeover frames the site in an iframe of itself — the widget must

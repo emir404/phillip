@@ -14,18 +14,27 @@ export const dynamic = "force-dynamic";
 
 // Stripe is the source of truth for "paid" — the widget never flips that state
 // client-side. Idempotent: marking an already-paid order paid is a no-op.
+// One URL serves BOTH Stripe modes (endpoints are registered per mode, each
+// with its own signing secret) — verify against live first, then test.
 export async function POST(req: Request) {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
   const signature = req.headers.get("stripe-signature");
-  if (!secret || !signature) {
+  const secrets = [process.env.STRIPE_WEBHOOK_SECRET, process.env.STRIPE_TEST_WEBHOOK_SECRET];
+  if (!signature || !secrets.some(Boolean)) {
     return NextResponse.json({ error: "webhook not configured" }, { status: 400 });
   }
 
   const payload = await req.text();
-  let event: Stripe.Event;
-  try {
-    event = stripe().webhooks.constructEvent(payload, signature, secret);
-  } catch {
+  let event: Stripe.Event | null = null;
+  for (const secret of secrets) {
+    if (!secret) continue;
+    try {
+      event = stripe().webhooks.constructEvent(payload, signature, secret);
+      break;
+    } catch {
+      // try the other mode's secret
+    }
+  }
+  if (!event) {
     return NextResponse.json({ error: "invalid signature" }, { status: 400 });
   }
 

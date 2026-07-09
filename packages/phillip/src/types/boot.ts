@@ -72,6 +72,10 @@ export interface BootConfig {
   session: { id: string; returning: boolean; startedAt: string };
   /** Resumed conversation for returning leads. */
   conversation?: Conversation;
+  /** Paid/live leads get a silent boot: the sales overlay never mounts —
+   *  the site is theirs now, nobody pitches an owner. When true, every other
+   *  field may be absent. */
+  silent?: boolean;
 }
 
 // The funnel a lead moves through; each transition is an event.
