@@ -3,6 +3,7 @@ import { after } from "next/server";
 import { budgetCapUsd } from "../../../lib/anthropic";
 import { corsJson, preflight } from "../../../lib/cors";
 import { runIteration } from "../../../lib/executor";
+import { githubToken, parseRepo } from "../../../lib/github";
 import {
   advanceLeadStage,
   createIteration,
@@ -54,6 +55,9 @@ export async function POST(req: Request) {
   ]);
   // A repo IS the site source — such leads carry no site_files rows.
   const repoUrl = leadRow?.repoUrl ?? null;
+  // Tokens are per owner, so "we have a token" is only ever a question about
+  // THIS repo's owner — a token for another org would fail at commit time.
+  const repoRef = repoUrl ? parseRepo(repoUrl) : null;
 
   let status: "queued" | "queued_manual" = "queued";
   let statusReason: string | undefined;
@@ -63,7 +67,7 @@ export async function POST(req: Request) {
   } else if (sources.length === 0 && !repoUrl) {
     status = "queued_manual";
     statusReason = "no_source";
-  } else if (repoUrl && !process.env.GITHUB_TOKEN) {
+  } else if (repoUrl && !(repoRef && githubToken(repoRef.owner))) {
     status = "queued_manual";
     statusReason = "no_github_token";
   } else if (!process.env.ANTHROPIC_API_KEY) {

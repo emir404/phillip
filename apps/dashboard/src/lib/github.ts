@@ -72,9 +72,27 @@ const MAX_READABLE_BYTES = 200_000;
 /** A repo this large is not a small business site — fail loudly, don't guess. */
 const MAX_TREE_ENTRIES = 500;
 
-function ghHeaders(): Record<string, string> {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) throw new Error("GITHUB_TOKEN is not configured");
+/**
+ * The env var holding the token for one owner: `Go-Nutz` → `GITHUB_TOKEN_GO_NUTZ`.
+ */
+export function tokenEnvKey(owner: string): string {
+  return `GITHUB_TOKEN_${owner.toUpperCase().replace(/[^A-Z0-9]/g, "_")}`;
+}
+
+/**
+ * A fine-grained PAT reaches exactly one account or organisation, so each owner
+ * brings its own token and `GITHUB_TOKEN` is only the fallback. Sharing one
+ * token across owners silently half-works: it reads a repo it cannot write.
+ */
+export function githubToken(owner: string): string | undefined {
+  return process.env[tokenEnvKey(owner)] ?? process.env.GITHUB_TOKEN;
+}
+
+function ghHeaders(owner: string): Record<string, string> {
+  const token = githubToken(owner);
+  if (!token) {
+    throw new Error(`no GitHub token for ${owner} — set ${tokenEnvKey(owner)} or GITHUB_TOKEN`);
+  }
   return {
     authorization: `Bearer ${token}`,
     accept: "application/vnd.github+json",
@@ -83,10 +101,10 @@ function ghHeaders(): Record<string, string> {
   };
 }
 
-async function gh<T>(path: string, init?: RequestInit): Promise<T> {
+async function gh<T>(owner: string, path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${GITHUB_API}${path}`, {
     ...init,
-    headers: { ...ghHeaders(), ...(init?.headers as Record<string, string>) },
+    headers: { ...ghHeaders(owner), ...(init?.headers as Record<string, string>) },
   });
   if (!res.ok) {
     const detail = await res.text();
@@ -133,7 +151,7 @@ export function repoLabel(ref: RepoRef): string {
 }
 
 export async function getRepoInfo(ref: RepoRef): Promise<{ defaultBranch: string }> {
-  const repo = await gh<{ default_branch: string }>(`/repos/${ref.owner}/${ref.repo}`);
+  const repo = await gh<{ default_branch: string }>(ref.owner, `/repos/${ref.owner}/${ref.repo}`);
   return { defaultBranch: repo.default_branch };
 }
 
@@ -153,12 +171,16 @@ function isExcluded(path: string): boolean {
 /** The repo's file list at branch HEAD — paths and sizes only, no contents. */
 export async function listTree(ref: RepoRef, branch: string): Promise<RepoTree> {
   const head = await gh<{ commit: { sha: string; commit: { tree: { sha: string } } } }>(
+    ref.owner,
     `/repos/${ref.owner}/${ref.repo}/branches/${encodeURIComponent(branch)}`,
   );
   const tree = await gh<{
     truncated: boolean;
     tree: { path: string; type: string; sha: string; size?: number }[];
-  }>(`/repos/${ref.owner}/${ref.repo}/git/trees/${head.commit.commit.tree.sha}?recursive=1`);
+  }>(
+    ref.owner,
+    `/repos/${ref.owner}/${ref.repo}/git/trees/${head.commit.commit.tree.sha}?recursive=1`,
+  );
 
   if (tree.truncated) {
     throw new Error("repo tree is too large to read in one pass");
@@ -181,6 +203,7 @@ export async function listTree(ref: RepoRef, branch: string): Promise<RepoTree> 
 
 export async function getBlobText(ref: RepoRef, sha: string): Promise<string> {
   const blob = await gh<{ content: string; encoding: string }>(
+    ref.owner,
     `/repos/${ref.owner}/${ref.repo}/git/blobs/${sha}`,
   );
   if (blob.encoding !== "base64") return blob.content;
@@ -210,12 +233,16 @@ export async function commitFiles(input: {
 
   const attempt = async (): Promise<string> => {
     const refRow = await gh<{ object: { sha: string } }>(
+      ref.owner,
       `${base}/git/ref/heads/${encodeURIComponent(branch)}`,
     );
     const headSha = refRow.object.sha;
-    const headCommit = await gh<{ tree: { sha: string } }>(`${base}/git/commits/${headSha}`);
+    const headCommit = await gh<{ tree: { sha: string } }>(
+      ref.owner,
+      `${base}/git/commits/${headSha}`,
+    );
 
-    const tree = await gh<{ sha: string }>(`${base}/git/trees`, {
+    const tree = await gh<{ sha: string }>(ref.owner, `${base}/git/trees`, {
       method: "POST",
       body: JSON.stringify({
         base_tree: headCommit.tree.sha,
@@ -227,12 +254,12 @@ export async function commitFiles(input: {
       }),
     });
 
-    const commit = await gh<{ sha: string }>(`${base}/git/commits`, {
+    const commit = await gh<{ sha: string }>(ref.owner, `${base}/git/commits`, {
       method: "POST",
       body: JSON.stringify({ message, tree: tree.sha, parents: [headSha] }),
     });
 
-    await gh(`${base}/git/refs/heads/${encodeURIComponent(branch)}`, {
+    await gh(ref.owner, `${base}/git/refs/heads/${encodeURIComponent(branch)}`, {
       method: "PATCH",
       body: JSON.stringify({ sha: commit.sha, force: false }),
     });
