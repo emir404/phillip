@@ -46,7 +46,7 @@ export default async function SettingsPage() {
       </header>
 
       <div className="grid items-start gap-4 lg:grid-cols-2">
-        <Card className="shadow-none">
+        <Card>
           <CardHeader>
             <CardTitle>Pricing &amp; guardrails</CardTitle>
             <CardDescription>
@@ -62,7 +62,7 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-none">
+        <Card>
           <CardHeader>
             <CardTitle>Persona</CardTitle>
             <CardDescription>Who the chat widget claims to be on preview sites.</CardDescription>
@@ -72,7 +72,7 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-none lg:col-span-2">
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>API access</CardTitle>
             <CardDescription>

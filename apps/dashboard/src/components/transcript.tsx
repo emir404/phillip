@@ -24,7 +24,13 @@ function MessageChips({ msg }: { msg: Message }) {
   );
 }
 
-export function Transcript({ conversation }: { conversation?: Conversation }) {
+export function Transcript({
+  conversation,
+  className,
+}: {
+  conversation?: Conversation;
+  className?: string;
+}) {
   const reduce = useReducedMotion() ?? false;
 
   if (!conversation || conversation.messages.length === 0) {
@@ -37,7 +43,7 @@ export function Transcript({ conversation }: { conversation?: Conversation }) {
 
   return (
     <m.div
-      className="flex max-h-96 flex-col gap-3 overflow-y-auto pr-1"
+      className={cn("flex max-h-96 flex-col gap-3 overflow-y-auto pr-1", className)}
       variants={container(reduce, 0.045)}
       initial="initial"
       animate="animate"

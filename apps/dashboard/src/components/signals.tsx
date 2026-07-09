@@ -24,7 +24,7 @@ export function Signals({ metrics }: { metrics: SessionMetrics }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4">
+      <div className="grid grid-cols-3 gap-x-3 gap-y-4">
         {stats.map(([k, v]) => (
           <div key={k} className="min-w-0">
             <p className="truncate text-base font-semibold tabular-nums">{v}</p>

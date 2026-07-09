@@ -78,7 +78,7 @@ export function IterationsTable({ rows }: { rows: IterationListRow[] }) {
         </TabsList>
       </Tabs>
 
-      <Card className="py-0 shadow-none">
+      <Card className="py-0">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">

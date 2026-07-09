@@ -4,9 +4,10 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
-import { Geist } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
   title: "phillip · nutz",
@@ -16,7 +17,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={cn("font-sans", geist.variable)} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={cn("font-sans", geist.variable, geistMono.variable)}
+      suppressHydrationWarning
+    >
       <body>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           {children}

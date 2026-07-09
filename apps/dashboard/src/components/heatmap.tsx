@@ -1,12 +1,12 @@
 import type { SectionAttention } from "@/lib/metrics";
 import { formatDuration } from "@/lib/metrics";
 
-// Blue (cool / barely looked at) → red (hot / dwelled the longest). Inline
-// style because the hue is continuous; alpha-blended so it sits well on both
-// light and dark card surfaces.
+// A sequential brand-blue ramp: faint (barely looked at) → saturated (dwelled
+// the longest). Inline style because the mix is continuous; color-mix against
+// transparent keeps it sitting well on both light and dark card surfaces.
 function heat(intensity: number): string {
-  const hue = Math.round(214 - (intensity / 100) * 206);
-  return `hsl(${hue} 78% 50% / 0.88)`;
+  const pct = Math.round(15 + (intensity / 100) * 80);
+  return `color-mix(in oklch, var(--brand) ${pct}%, transparent)`;
 }
 
 // A section-level attention heatmap: which parts of the page held the lead's
