@@ -1,5 +1,4 @@
-/** The one opening line Phillip ever says — shared by the server (persisted at
- *  boot) and the widget (offline/mock fallback) so the copy can't drift. */
-export function defaultGreeting(name: string, business: string): string {
-  return `hey, i'm ${name.toLowerCase()}. i built this one for ${business}. honest take — what do you think?`;
-}
+/** The opening line moved to the i18n module when Phillip learned to speak
+ *  more than English. Re-exported here so the published `@nutz/phillip/greeting`
+ *  subpath keeps resolving. */
+export { defaultGreeting } from "../i18n/language";

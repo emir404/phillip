@@ -1,20 +1,12 @@
 import { useRef, useState } from "react";
 import type { Tracker } from "../analytics";
-import { defaultGreeting } from "../intent/greeting";
+import { defaultGreeting, reactionQuickReplies } from "../i18n/language";
 import type { Conversation, Intent, Message, QuickReply, Sentiment } from "../intent/types";
 import { prefixedId } from "../lib/id";
 import { log } from "../lib/log";
 import type { TransportClient } from "../transport";
 import type { SendMessageRequest } from "../transport";
 import type { Persona } from "../types/boot";
-
-// The three doors at the reaction step. Ids match what the backend classifier
-// (and the mock) expect.
-export const REACTION_QUICK_REPLIES: QuickReply[] = [
-  { id: "qr_love", label: "love it", intent: "positive" },
-  { id: "qr_but", label: "looks good, but…", intent: "iterate" },
-  { id: "qr_no", label: "not feeling it", intent: "objection" },
-];
 
 // Control events carry the backend's payload through — `hint` is the lead's
 // concrete change request, so the iteration flow never has to re-ask.
@@ -47,7 +39,7 @@ export interface ConversationApi {
 const nowIso = (): string => new Date().toISOString();
 
 function greeting(persona: Persona, business: string): Message {
-  const text = persona.greeting ?? defaultGreeting(persona.name, business);
+  const text = persona.greeting ?? defaultGreeting(persona.name, business, persona.language);
   return { id: prefixedId("msg"), role: "phillip", text, ts: nowIso() };
 }
 
@@ -69,7 +61,7 @@ export function useConversation(opts: UseConversationOptions): ConversationApi {
   const [quickReplies, setQuickReplies] = useState<QuickReply[]>(() => {
     const initial = opts.initial?.messages ?? [];
     const last = initial[initial.length - 1];
-    return !last || last.role === "phillip" ? REACTION_QUICK_REPLIES : [];
+    return !last || last.role === "phillip" ? reactionQuickReplies(persona.language) : [];
   });
 
   const streamingRef = useRef(false);

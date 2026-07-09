@@ -7,5 +7,18 @@ export { mount } from "./mount";
 export type { MountOptions } from "./mount";
 // Default engagement tuning — the dashboard's boot route serves this verbatim.
 export { DEFAULT_ENGAGEMENT } from "./engagement/weights";
-export { defaultGreeting } from "./intent/greeting";
+// The language Phillip speaks, and every line he says that the model doesn't write.
+export {
+  coerceLanguage,
+  DEFAULT_LANGUAGE,
+  defaultGreeting,
+  isLanguage,
+  LANGUAGE_LABELS,
+  LANGUAGE_NAMES,
+  LANGUAGES,
+  type Language,
+  type QuickReplyId,
+  quickReplyText,
+  reactionQuickReplies,
+} from "./i18n/language";
 export type * from "./types";

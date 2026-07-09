@@ -1,4 +1,5 @@
-import type { Intent, QuickReply, Sentiment } from "@nutz/phillip";
+import type { Intent, Language, QuickReply, Sentiment } from "@nutz/phillip";
+import { LANGUAGE_NAMES, quickReplyText } from "@nutz/phillip/i18n";
 import { nanoid } from "nanoid";
 import {
   CHAT_MODEL,
@@ -9,7 +10,6 @@ import {
 import { corsJson, preflight } from "../../../../../lib/cors";
 import { SSE_HEADERS, frame } from "../../../../../lib/sse";
 import {
-  DEFAULT_PERSONA,
   DEFAULT_PRICING,
   type PersonaSettings,
   type PricingSettings,
@@ -18,8 +18,10 @@ import {
   getConversationForLead,
   getConversationRow,
   getLeadRow,
+  getPersona,
   getSetting,
   getVisitorSession,
+  resolveLanguage,
   setConversationQuickReplies,
   spendForLead,
 } from "../../../../../lib/store";
@@ -36,16 +38,10 @@ interface SendMessageBody {
   context?: Record<string, unknown>;
 }
 
-// The static quick replies the widget can send ids for without the model
-// having proposed them (reaction chips + the mock's iterate options).
-const STATIC_QUICK_REPLIES: Record<string, string> = {
-  qr_love: "love it",
-  qr_but: "looks good, but…",
-  qr_no: "not feeling it",
-  opt_colors: "the colors",
-  opt_copy: "the words",
-  opt_photos: "the photos",
-};
+// The static quick replies the widget can send ids for without the model having
+// proposed them (reaction chips + the mock's iterate options) live in the shared
+// i18n module — `quickReplyText(id, language)` returns the exact words the lead
+// tapped, so the thread stores what they actually read.
 
 const SIGNAL_TOOL = {
   name: "signal",
@@ -96,8 +92,49 @@ function money(cents: number, currency: string): string {
   return `${symbol}${whole}`;
 }
 
+/** How each language addresses a stranger who owns a business. */
+const POLITE_ADDRESS: Partial<Record<Language, string>> = {
+  de: "Sie",
+  fr: "vous",
+  es: "usted",
+  it: "Lei",
+  nl: "u",
+  pt: "você",
+};
+
+/**
+ * The voice, in the lead's language.
+ *
+ * English keeps its all-lowercase texting register — that is the brand. No
+ * other language does: all-lowercase German reads as a typo rather than as
+ * style, and a stranger pitching a business owner uses the polite form. So the
+ * register is described per language instead of assumed.
+ */
+function voiceLines(language: Language): string[] {
+  if (language === "en") {
+    return [
+      "- lowercase, relaxed, first person — like texting a client you respect",
+      "- short: one to three sentences, never lists, headers, or emoji",
+      "- plain words. no marketing speak, nothing that sounds automated or corporate",
+      "- these are EU/US small-business owners: be warm, direct, and competent — a good tradesperson, not a salesman",
+    ];
+  }
+  const polite = POLITE_ADDRESS[language];
+  return [
+    `- write every word in ${LANGUAGE_NAMES[language]}. never English, even if the lead writes to you in English — only switch if they ask you to.`,
+    `- use ${LANGUAGE_NAMES[language]}'s normal capitalization and punctuation. do not force lowercase.`,
+    ...(polite
+      ? [`- address them with the polite form ("${polite}"): you are a stranger pitching them.`]
+      : []),
+    "- short: one to three sentences, never lists, headers, or emoji",
+    "- plain words. no marketing speak, nothing that sounds automated or corporate",
+    "- these are small-business owners: be warm, direct, and competent — a good tradesperson, not a salesman",
+  ];
+}
+
 function systemPrompt(input: {
   persona: PersonaSettings;
+  language: Language;
   business: string;
   industry?: string;
   contact?: string;
@@ -112,10 +149,7 @@ function systemPrompt(input: {
     `You are ${input.persona.name}, the person who built the website preview the visitor is looking at right now. You work at nutz, a small studio that designs and hosts websites for local businesses. You are chatting with ${who} ${input.business}${input.industry ? ` (a ${input.industry})` : ""}, inside a small chat bubble on their preview.`,
     "",
     "How you talk:",
-    "- lowercase, relaxed, first person — like texting a client you respect",
-    "- short: one to three sentences, never lists, headers, or emoji",
-    "- plain words. no marketing speak, nothing that sounds automated or corporate",
-    "- these are EU/US small-business owners: be warm, direct, and competent — a good tradesperson, not a salesman",
+    ...voiceLines(input.language),
     "",
     "What you are doing: this preview is real and for sale. Get their honest reaction, make requested tweaks fast, and when they are happy, offer to make it live.",
     `- pricing, only when relevant or asked: ${input.pricing.setup} one-time for the site, then ${input.pricing.monthly}/mo which covers hosting, the domain wiring, and ongoing edits`,
@@ -135,6 +169,13 @@ function systemPrompt(input: {
     `Funnel stage right now: ${input.stage}.`,
     "Always call the signal tool exactly once, after your reply text. If nothing on-screen should happen, use action none.",
   );
+  if (input.language !== "en") {
+    // The chips are rendered verbatim next to a reply the lead just read in
+    // their own language; change_request is quoted back to them on the preview.
+    lines.push(
+      `The quick_replies you propose must be written in ${LANGUAGE_NAMES[input.language]} too, as must change_request.`,
+    );
+  }
   return lines.join("\n");
 }
 
@@ -149,15 +190,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
 
   const session = await getVisitorSession(sessionId);
   if (!session) return corsJson({ error: "unknown session" }, { status: 404 });
-  const lead = await getLeadRow(session.leadId);
+  // The persona is needed before the text below: a chip arrives as a bare id,
+  // and only the language tells us which words the lead actually tapped.
+  const [lead, persona] = await Promise.all([getLeadRow(session.leadId), getPersona()]);
   if (!lead) return corsJson({ error: "unknown lead" }, { status: 404 });
+  const language = resolveLanguage(lead.language, persona.language);
 
   // Resolve the user's text: free text, a static chip, or a model-proposed chip.
   let text = body.message?.trim();
   if (!text && body.quickReplyId) {
     const convRow = await getConversationRow(lead.id);
     const proposed = convRow?.lastQuickReplies?.find((q) => q.id === body.quickReplyId);
-    text = proposed?.label ?? STATIC_QUICK_REPLIES[body.quickReplyId];
+    text = proposed?.label ?? quickReplyText(body.quickReplyId, language);
   }
   if (!text) return corsJson({ error: "message or quickReplyId required" }, { status: 400 });
 
@@ -167,19 +211,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ session
     { id: `msg_${nanoid(10)}`, role: "lead", text, ts: new Date().toISOString() },
   ]);
 
-  const [persona, pricing, escalationEmail, spend, cap, roundsUsed, conversation] =
-    await Promise.all([
-      getSetting<PersonaSettings>("persona", DEFAULT_PERSONA),
-      getSetting<PricingSettings>("pricing", DEFAULT_PRICING),
-      getSetting<string>("escalationEmail", "team@nutz.inc"),
-      spendForLead(lead.id),
-      budgetCapUsd(lead.budgetCapUsd),
-      countIterations(lead.id),
-      getConversationForLead(lead.id),
-    ]);
+  const [pricing, escalationEmail, spend, cap, roundsUsed, conversation] = await Promise.all([
+    getSetting<PricingSettings>("pricing", DEFAULT_PRICING),
+    getSetting<string>("escalationEmail", "team@nutz.inc"),
+    spendForLead(lead.id),
+    budgetCapUsd(lead.budgetCapUsd),
+    countIterations(lead.id),
+    getConversationForLead(lead.id),
+  ]);
 
   const system = systemPrompt({
     persona,
+    language,
     business: lead.business,
     industry: lead.industry ?? undefined,
     contact: lead.contact ?? undefined,

@@ -9,7 +9,6 @@ export { TypingIndicator } from "./TypingIndicator";
 export {
   type ControlEvent,
   type ConversationApi,
-  REACTION_QUICK_REPLIES,
   useConversation,
   type UseConversationOptions,
 } from "./useConversation";

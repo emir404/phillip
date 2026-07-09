@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/select";
 import { revealApiKeyAction, savePersonaAction, saveSettingsAction } from "@/lib/actions";
 import type { PersonaSettings, PricingSettings } from "@/lib/store";
+import type { Language } from "@nutz/phillip";
+import { LANGUAGES, LANGUAGE_LABELS } from "@nutz/phillip/i18n";
 import { Eye, EyeSlash } from "@phosphor-icons/react";
 import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
@@ -22,6 +24,8 @@ const CURRENCIES = [
   { label: "USD", value: "usd" },
   { label: "GBP", value: "gbp" },
 ];
+
+const LANGUAGE_ITEMS = LANGUAGES.map((value) => ({ value, label: LANGUAGE_LABELS[value] }));
 
 export function BillingForm({
   pricing,
@@ -128,6 +132,7 @@ export function BillingForm({
 }
 
 export function PersonaForm({ persona }: { persona: PersonaSettings }) {
+  const [language, setLanguage] = useState<Language>(persona.language);
   const [pending, setPending] = useState(false);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -137,6 +142,7 @@ export function PersonaForm({ persona }: { persona: PersonaSettings }) {
     const res = await savePersonaAction({
       name: String(fd.get("name") ?? ""),
       title: String(fd.get("title") ?? ""),
+      language,
     });
     setPending(false);
     if (res.ok) toast.success("Persona saved.");
@@ -145,7 +151,7 @@ export function PersonaForm({ persona }: { persona: PersonaSettings }) {
 
   return (
     <form onSubmit={onSubmit} className="grid gap-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <div className="grid gap-1.5">
           <Label htmlFor="persona-name">Name</Label>
           <Input id="persona-name" name="name" required defaultValue={persona.name} />
@@ -154,7 +160,29 @@ export function PersonaForm({ persona }: { persona: PersonaSettings }) {
           <Label htmlFor="persona-title">Title</Label>
           <Input id="persona-title" name="title" defaultValue={persona.title} />
         </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="persona-language">Language</Label>
+          <Select
+            items={LANGUAGE_ITEMS}
+            value={language}
+            onValueChange={(v) => setLanguage(v as Language)}
+          >
+            <SelectTrigger id="persona-language" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {LANGUAGE_ITEMS.map((l) => (
+                <SelectItem key={l.value} value={l.value}>
+                  {l.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
+      <p className="text-xs text-muted-foreground">
+        Phillip greets and replies in this language on every lead that doesn't set its own.
+      </p>
       <div>
         <Button type="submit" size="sm" disabled={pending}>
           {pending ? "Saving…" : "Save persona"}

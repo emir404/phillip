@@ -12,11 +12,35 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { createLeadAction } from "@/lib/actions";
+import { createLeadAction, getLeadDefaultsAction } from "@/lib/actions";
+import { money } from "@/lib/analytics";
+import type { PricingSettings } from "@/lib/store";
+import type { Language } from "@nutz/phillip";
+import { LANGUAGES, LANGUAGE_LABELS } from "@nutz/phillip/i18n";
 import { Plus } from "@phosphor-icons/react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
+
+// The picker's "use the global persona's language" option, the same way a blank
+// price field means "charge the global price". A named sentinel rather than "",
+// which a Select is entitled to read as "nothing selected".
+const INHERIT = "inherit";
+
+const languageItems = (globalLanguage: Language | null) => [
+  {
+    value: INHERIT,
+    label: globalLanguage ? `Default — ${LANGUAGE_LABELS[globalLanguage]}` : "Default",
+  },
+  ...LANGUAGES.map((value) => ({ value, label: LANGUAGE_LABELS[value] })),
+];
 
 // Mirrors embedSnippet()/nextSnippet() in src/lib/previews.ts, composed
 // client-side so the host can come from window.location.origin.
@@ -41,11 +65,28 @@ interface Created {
   hasRepo: boolean;
 }
 
+const major = (cents: number) => (cents / 100).toFixed(2);
+
 export function NewLeadDialog() {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [created, setCreated] = useState<Created | null>(null);
   const [tab, setTab] = useState<"html" | "next">("html");
+  // The globals a blank field falls back to, shown as its placeholder/label.
+  const [pricing, setPricing] = useState<PricingSettings | null>(null);
+  const [globalLanguage, setGlobalLanguage] = useState<Language | null>(null);
+  const [language, setLanguage] = useState<string>(INHERIT);
+
+  useEffect(() => {
+    if (!open || pricing) return;
+    getLeadDefaultsAction().then(
+      (d) => {
+        setPricing(d.pricing);
+        setGlobalLanguage(d.language);
+      },
+      () => {},
+    );
+  }, [open, pricing]);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -61,6 +102,9 @@ export function NewLeadDialog() {
       siteUrl: String(fd.get("siteUrl") ?? ""),
       siteHtml: String(fd.get("siteHtml") ?? ""),
       repoUrl,
+      setupAmount: String(fd.get("setupAmount") ?? ""),
+      monthlyAmount: String(fd.get("monthlyAmount") ?? ""),
+      language: language === INHERIT ? "" : language,
     });
     setPending(false);
     if (!res.ok) {
@@ -73,12 +117,17 @@ export function NewLeadDialog() {
     toast.success("Lead created — drop the snippet into the preview site.");
   }
 
+  const langItems = languageItems(globalLanguage);
+
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (!next) setCreated(null);
+        if (!next) {
+          setCreated(null);
+          setLanguage(INHERIT);
+        }
       }}
     >
       <DialogTrigger render={<Button size="sm" />}>
@@ -156,7 +205,7 @@ export function NewLeadDialog() {
                   <Input id="nl-email" name="email" type="email" placeholder="dana@example.com" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <div className="grid gap-1.5">
                   <Label htmlFor="nl-industry">Industry</Label>
                   <Input id="nl-industry" name="industry" placeholder="barbershop" />
@@ -165,7 +214,60 @@ export function NewLeadDialog() {
                   <Label htmlFor="nl-source">Source</Label>
                   <Input id="nl-source" name="source" placeholder="manual" />
                 </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="nl-language">Language</Label>
+                  <Select
+                    items={langItems}
+                    value={language}
+                    onValueChange={(v) => setLanguage(String(v))}
+                  >
+                    <SelectTrigger id="nl-language" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {langItems.map((l) => (
+                        <SelectItem key={l.value} value={l.value}>
+                          {l.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Phillip greets this lead and replies in this language.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="nl-setup">Website price</Label>
+                  <Input
+                    id="nl-setup"
+                    name="setupAmount"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    inputMode="decimal"
+                    placeholder={pricing ? major(pricing.setupAmountCents) : ""}
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="nl-monthly">Hosting / month</Label>
+                  <Input
+                    id="nl-monthly"
+                    name="monthlyAmount"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    inputMode="decimal"
+                    placeholder={pricing ? major(pricing.monthlyAmountCents) : ""}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {pricing
+                  ? `Leave blank to charge the global price — ${money(pricing.setupAmountCents, pricing.currency)} one-time, then ${money(pricing.monthlyAmountCents, pricing.currency)}/mo.`
+                  : "Leave blank to charge the global price set in Settings."}
+              </p>
               <div className="grid gap-1.5">
                 <Label htmlFor="nl-siteUrl">Site URL</Label>
                 <Input id="nl-siteUrl" name="siteUrl" placeholder="https://preview.example.com" />

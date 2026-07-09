@@ -1,16 +1,16 @@
 import type { BootConfig } from "@nutz/phillip";
-import { defaultGreeting } from "@nutz/phillip/greeting";
+import { defaultGreeting } from "@nutz/phillip/i18n";
 import { DEFAULT_ENGAGEMENT } from "@nutz/phillip/weights";
 import { corsJson, preflight } from "../../../../../lib/cors";
 import {
-  DEFAULT_PERSONA,
   DEFAULT_PRICING,
-  type PersonaSettings,
   type PricingSettings,
   createVisitorSession,
   getConversationForLead,
   getLeadByPreviewId,
+  getPersona,
   getSetting,
+  resolveLanguage,
   seedConversation,
 } from "../../../../../lib/store";
 
@@ -43,10 +43,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   const origin = new URL(req.url).origin;
   const [persona, pricing, includes] = await Promise.all([
-    getSetting<PersonaSettings>("persona", DEFAULT_PERSONA),
+    getPersona(),
     getSetting<PricingSettings>("pricing", DEFAULT_PRICING),
     getSetting<string[]>("offerIncludes", DEFAULT_INCLUDES),
   ]);
+  const language = resolveLanguage(lead.language, persona.language);
 
   const session = await createVisitorSession({
     previewId: preview.id,
@@ -58,7 +59,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   // with the lead's reply to a line the DB never saw.
   let conversation = await getConversationForLead(lead.id);
   if (!conversation?.messages.length) {
-    await seedConversation(lead.id, session.id, defaultGreeting(persona.name, lead.business));
+    await seedConversation(
+      lead.id,
+      session.id,
+      defaultGreeting(persona.name, lead.business, language),
+    );
     conversation = await getConversationForLead(lead.id);
   }
 
@@ -77,6 +82,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       // Must be absolute — a relative path would resolve against the lead
       // site's origin, not ours.
       avatarUrl: new URL(persona.avatarUrl, origin).toString(),
+      // The lead's override wins over the global; the widget renders its chips
+      // from this, so it must be the same language the greeting above is in.
+      language,
     },
     offer: {
       productId: "site_standard",

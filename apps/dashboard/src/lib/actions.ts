@@ -1,18 +1,22 @@
 "use server";
 
+import type { Language } from "@nutz/phillip";
+import { isLanguage } from "@nutz/phillip/i18n";
 import { revalidatePath } from "next/cache";
-import { deleteBlockedReason, purgeLead } from "./leads";
+import { deleteBlockedReason, pricingLockedReason, purgeLead } from "./leads";
 import { createLeadWithPreview } from "./previews";
 import {
-  DEFAULT_PERSONA,
   DEFAULT_PRICING,
-  type PersonaSettings,
   type PricingSettings,
   advanceLeadStage,
+  getConversationForLead,
   getIteration,
   getLead,
   getLeadRow,
+  getPersona,
   getSetting,
+  latestOrderForLead,
+  resetConversation,
   setSetting,
   updateEscalation,
   updateIteration,
@@ -28,6 +32,26 @@ function fail(error: unknown, fallback: string): { ok: false; error: string } {
   return { ok: false, error: error instanceof Error ? error.message : fallback };
 }
 
+/** Major units ("299.00") → cents. `null` signals an unusable amount. */
+const toCents = (major: string): number | null => {
+  const n = Number.parseFloat(major);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null;
+};
+
+/** Blank means "inherit the global price", so it maps to `undefined`, not 0. */
+const toOptionalCents = (major: string | undefined): number | null | undefined =>
+  major?.trim() ? toCents(major) : undefined;
+
+/**
+ * Blank means "inherit the global language" → `undefined`. An unrecognized code
+ * is a caller bug, not an inherit, so it maps to `null` and the caller errors.
+ */
+const toOptionalLanguage = (value: string | undefined): Language | null | undefined => {
+  const raw = value?.trim();
+  if (!raw) return undefined;
+  return isLanguage(raw) ? raw : null;
+};
+
 // --- leads -------------------------------------------------------------------
 
 export interface CreateLeadInput {
@@ -41,6 +65,11 @@ export interface CreateLeadInput {
   siteHtml?: string;
   /** GitHub repo holding the site source — iterations commit and push to it. */
   repoUrl?: string;
+  /** Major units, e.g. "349.00". Blank = charge the global price. */
+  setupAmount?: string;
+  monthlyAmount?: string;
+  /** An ISO code from `LANGUAGES`. Blank = speak the global persona's language. */
+  language?: string;
 }
 
 export async function createLeadAction(
@@ -48,6 +77,13 @@ export async function createLeadAction(
 ): Promise<ActionResult<{ leadId: string; previewId: string }>> {
   const business = input.business?.trim();
   if (!business) return { ok: false, error: "Business name is required." };
+  const setupAmountCents = toOptionalCents(input.setupAmount);
+  const monthlyAmountCents = toOptionalCents(input.monthlyAmount);
+  if (setupAmountCents === null || monthlyAmountCents === null) {
+    return { ok: false, error: "Custom prices must be non-negative numbers." };
+  }
+  const language = toOptionalLanguage(input.language);
+  if (language === null) return { ok: false, error: "Unsupported language." };
   try {
     const { leadId, previewId } = await createLeadWithPreview({
       business,
@@ -58,11 +94,90 @@ export async function createLeadAction(
       siteUrl: input.siteUrl?.trim() || undefined,
       repoUrl: input.repoUrl?.trim() || undefined,
       files: input.siteHtml?.trim() ? [{ path: "index.html", content: input.siteHtml }] : undefined,
+      setupAmountCents,
+      monthlyAmountCents,
+      language,
     });
     revalidatePath("/");
     return { ok: true, leadId, previewId };
   } catch (err) {
     return fail(err, "Could not create the lead.");
+  }
+}
+
+export interface SetLeadPricingInput {
+  leadId: string;
+  /** Major units, e.g. "349.00". Blank clears the override back to the global. */
+  setupAmount: string;
+  monthlyAmount: string;
+}
+
+/**
+ * Re-price a single lead. Blank fields clear the override, so the lead falls
+ * back to `settings.pricing` again. The lock is re-checked here, not just in
+ * the UI — the form is a hint, this is the rule.
+ */
+export async function setLeadPricingAction(input: SetLeadPricingInput): Promise<ActionResult> {
+  const setupAmountCents = toOptionalCents(input.setupAmount);
+  const monthlyAmountCents = toOptionalCents(input.monthlyAmount);
+  if (setupAmountCents === null || monthlyAmountCents === null) {
+    return { ok: false, error: "Custom prices must be non-negative numbers." };
+  }
+  try {
+    const lead = await getLeadRow(input.leadId);
+    if (!lead) return { ok: false, error: "Lead not found." };
+    const order = await latestOrderForLead(input.leadId);
+    const locked = pricingLockedReason(lead, order?.status);
+    if (locked) return { ok: false, error: locked };
+
+    await updateLeadFields(input.leadId, {
+      setupAmountCents: setupAmountCents ?? null,
+      monthlyAmountCents: monthlyAmountCents ?? null,
+    });
+    revalidatePath(`/leads/${input.leadId}`);
+    revalidatePath("/");
+    return { ok: true };
+  } catch (err) {
+    return fail(err, "Could not update the pricing.");
+  }
+}
+
+export interface SetLeadLanguageInput {
+  leadId: string;
+  /** An ISO code from `LANGUAGES`. Blank clears the override back to the global. */
+  language: string;
+}
+
+/**
+ * Switch the language Phillip speaks to one lead. Blank clears the override.
+ *
+ * The opening greeting is persisted at first boot, so a lead who has already
+ * been greeted carries that sentence in the old language. When nothing but the
+ * greeting is in the thread, drop it — the next boot re-seeds it in the new
+ * language and nobody loses anything. Once the lead has actually spoken, the
+ * transcript is theirs: leave it, and let the system prompt carry Phillip into
+ * the new language from his next reply on.
+ */
+export async function setLeadLanguageAction(input: SetLeadLanguageInput): Promise<ActionResult> {
+  const language = toOptionalLanguage(input.language);
+  if (language === null) return { ok: false, error: "Unsupported language." };
+  try {
+    const lead = await getLeadRow(input.leadId);
+    if (!lead) return { ok: false, error: "Lead not found." };
+    if ((lead.language ?? null) === (language ?? null)) return { ok: true };
+
+    await updateLeadFields(input.leadId, { language: language ?? null });
+
+    const conversation = await getConversationForLead(input.leadId);
+    const onlyGreeting =
+      !!conversation?.messages.length && conversation.messages.every((m) => m.role !== "lead");
+    if (onlyGreeting) await resetConversation(input.leadId);
+
+    revalidatePath(`/leads/${input.leadId}`);
+    revalidatePath("/");
+    return { ok: true };
+  } catch (err) {
+    return fail(err, "Could not update the language.");
   }
 }
 
@@ -77,10 +192,18 @@ export interface SaveSettingsInput {
   escalationEmail: string;
 }
 
-const toCents = (major: string): number | null => {
-  const n = Number.parseFloat(major);
-  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null;
-};
+/** The globals a new lead falls back to — read by the "New lead" dialog to
+ *  label what a blank field will actually do. */
+export async function getLeadDefaultsAction(): Promise<{
+  pricing: PricingSettings;
+  language: Language;
+}> {
+  const [pricing, persona] = await Promise.all([
+    getSetting<PricingSettings>("pricing", DEFAULT_PRICING),
+    getPersona(),
+  ]);
+  return { pricing, language: persona.language };
+}
 
 export async function saveSettingsAction(input: SaveSettingsInput): Promise<ActionResult> {
   const setupAmountCents = toCents(input.setupAmount);
@@ -111,16 +234,21 @@ export async function saveSettingsAction(input: SaveSettingsInput): Promise<Acti
 export async function savePersonaAction(input: {
   name: string;
   title: string;
+  language: string;
 }): Promise<ActionResult> {
   if (!input.name.trim()) return { ok: false, error: "Persona name is required." };
+  if (!isLanguage(input.language)) return { ok: false, error: "Unsupported language." };
   try {
-    const current = await getSetting<PersonaSettings>("persona", DEFAULT_PERSONA);
+    const current = await getPersona();
     await setSetting("persona", {
       ...current,
       name: input.name.trim(),
       title: input.title.trim(),
+      language: input.language,
     });
+    // Every lead without its own override now speaks a different language.
     revalidatePath("/settings");
+    revalidatePath("/leads", "layout");
     return { ok: true };
   } catch (err) {
     return fail(err, "Could not save the persona.");
@@ -164,6 +292,26 @@ export async function setTestModeAction(leadId: string, on: boolean): Promise<Ac
     return { ok: true };
   } catch (err) {
     return fail(err, "Could not update test mode.");
+  }
+}
+
+/**
+ * Clear the lead's chat thread so the next visit starts over from Phillip's
+ * greeting. Only the conversation goes — events, engagement, orders and
+ * iterations are untouched, so the funnel history stays intact.
+ */
+export async function resetConversationAction(
+  leadId: string,
+): Promise<ActionResult<{ removed: number }>> {
+  try {
+    const lead = await getLeadRow(leadId);
+    if (!lead) return { ok: false, error: "Lead not found." };
+    const removed = await resetConversation(leadId);
+    revalidatePath(`/leads/${leadId}`);
+    revalidatePath("/");
+    return { ok: true, removed };
+  } catch (err) {
+    return fail(err, "Could not reset the conversation.");
   }
 }
 

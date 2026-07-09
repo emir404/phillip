@@ -3,6 +3,7 @@ import type {
   DeviceContext,
   GeoContext,
   Intent,
+  Language,
   LeadStage,
   OrderStatus,
   PreviewStatus,
@@ -36,6 +37,8 @@ export const leads = sqliteTable("leads", {
   budgetCapUsd: real("budget_cap_usd"),
   setupAmountCents: integer("setup_amount_cents"),
   monthlyAmountCents: integer("monthly_amount_cents"),
+  // The language Phillip speaks to this lead; null = the global persona's.
+  language: text("language").$type<Language>(),
   // Test-mode leads run checkout against Stripe's test keys — full purchase
   // rehearsals (4242… card) with zero real money.
   testMode: integer("test_mode", { mode: "boolean" }).notNull().default(false),

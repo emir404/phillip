@@ -1,3 +1,4 @@
+import type { OrderStatus } from "@nutz/phillip";
 import { deleteVercelProject } from "./executor";
 import { type LeadRow, deleteLead } from "./store";
 
@@ -10,6 +11,21 @@ export function deleteBlockedReason(lead: LeadRow): string | null {
   // A rehearsal lead is always disposable, even once it has "paid".
   if ((lead.stage === "paid" || lead.stage === "live") && !lead.testMode) {
     return "This lead has paid — real customers can't be deleted.";
+  }
+  return null;
+}
+
+/**
+ * Why a lead's price may not be edited, or null when it may.
+ *
+ * Once the money lands the quote is history — Stripe bills the subscription it
+ * already has, so a new number here would describe a charge that never
+ * happened. A rehearsal lead is no exception: its "paid" stage silences the
+ * widget, so there is nothing left to re-quote.
+ */
+export function pricingLockedReason(lead: LeadRow, orderStatus?: OrderStatus): string | null {
+  if (orderStatus === "paid" || lead.stage === "paid" || lead.stage === "live") {
+    return "This lead has paid — its price is locked.";
   }
   return null;
 }

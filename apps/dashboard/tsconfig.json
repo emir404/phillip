@@ -20,6 +20,7 @@
       "@nutz/phillip": ["../../packages/phillip/src/types/index.ts"],
       "@nutz/phillip/weights": ["../../packages/phillip/src/engagement/weights.ts"],
       "@nutz/phillip/greeting": ["../../packages/phillip/src/intent/greeting.ts"],
+      "@nutz/phillip/i18n": ["../../packages/phillip/src/i18n/language.ts"],
       "@/*": ["./src/*"]
     },
     "plugins": [

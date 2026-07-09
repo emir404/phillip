@@ -1,13 +1,7 @@
 import { CopyButton } from "@/components/copy-button";
 import { ApiKeyReveal, BillingForm, PersonaForm } from "@/components/settings-forms";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  DEFAULT_PERSONA,
-  DEFAULT_PRICING,
-  type PersonaSettings,
-  type PricingSettings,
-  getSetting,
-} from "@/lib/store";
+import { DEFAULT_PRICING, type PricingSettings, getPersona, getSetting } from "@/lib/store";
 import { headers } from "next/headers";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function SettingsPage() {
   const [pricing, persona, budgetCap, escalationEmail, h] = await Promise.all([
     getSetting<PricingSettings>("pricing", DEFAULT_PRICING),
-    getSetting<PersonaSettings>("persona", DEFAULT_PERSONA),
+    getPersona(),
     getSetting<number>("budgetCapUsd", Number(process.env.PHILLIP_BUDGET_CAP_USD ?? 5)),
     getSetting<string>("escalationEmail", "team@nutz.inc"),
     headers(),

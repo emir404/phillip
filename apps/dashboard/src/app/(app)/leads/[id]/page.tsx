@@ -6,7 +6,10 @@ import { Heatmap } from "@/components/heatmap";
 import { IterationStatusBadge, statusReasonLabel } from "@/components/iteration-status-badge";
 import { ConnectDomainForm } from "@/components/lead/connect-domain-form";
 import { DeleteLeadButton } from "@/components/lead/delete-lead-button";
+import { LeadLanguageForm } from "@/components/lead/language-form";
 import { MakeLiveSwitch } from "@/components/lead/make-live-switch";
+import { LeadPricingForm } from "@/components/lead/pricing-form";
+import { ResetConversationButton } from "@/components/lead/reset-conversation-button";
 import {
   MarkEscalationHandledButton,
   MarkIterationDoneButton,
@@ -28,6 +31,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { money, relativeTime } from "@/lib/analytics";
 import { budgetCapUsd } from "@/lib/anthropic";
+import { pricingLockedReason } from "@/lib/leads";
 import { agentFeed, attention, sessionMetrics } from "@/lib/metrics";
 import { embedSnippet, nextSnippet } from "@/lib/previews";
 import {
@@ -35,6 +39,7 @@ import {
   type PricingSettings,
   getLead,
   getLeadRow,
+  getPersona,
   getSetting,
   listEscalations,
   listIterations,
@@ -57,17 +62,27 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   const dl = await getLead(id);
   if (!dl) notFound();
 
-  const [leadRow, escalations, usage, spend, allIterations, pricing, h] = await Promise.all([
-    getLeadRow(id),
-    listEscalations(id),
-    usageForLead(id),
-    spendForLead(id),
-    listIterations(),
-    getSetting<PricingSettings>("pricing", DEFAULT_PRICING),
-    headers(),
-  ]);
-  const cap = await budgetCapUsd(leadRow?.budgetCapUsd ?? null);
+  const [leadRow, escalations, usage, spend, allIterations, pricing, persona, h] =
+    await Promise.all([
+      getLeadRow(id),
+      listEscalations(id),
+      usageForLead(id),
+      spendForLead(id),
+      listIterations(),
+      getSetting<PricingSettings>("pricing", DEFAULT_PRICING),
+      getPersona(),
+      headers(),
+    ]);
+  if (!leadRow) notFound();
+  const cap = await budgetCapUsd(leadRow.budgetCapUsd);
   const iterations = allIterations.filter((r) => r.iteration.leadId === id);
+
+  // A paid lead's price is history; anything earlier is still up for edit.
+  const lockedReason = pricingLockedReason(leadRow, dl.order?.status);
+
+  // Once the lead has answered, switching language can't rewrite the greeting
+  // they already read — only the replies from here on.
+  const hasSpoken = !!dl.conversation?.messages.some((m) => m.role === "lead");
 
   const host = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host") ?? "localhost"}`;
   const snippet = embedSnippet(host, dl.preview.id);
@@ -146,6 +161,13 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
                   ? `${dl.conversation.messages.length} messages with Phillip`
                   : "Phillip is still watching"}
               </CardDescription>
+              <CardAction>
+                <ResetConversationButton
+                  leadId={dl.lead.id}
+                  messageCount={dl.conversation?.messages.length ?? 0}
+                  silenced={orderPaid || isLive}
+                />
+              </CardAction>
             </CardHeader>
             <CardContent>
               <Transcript conversation={dl.conversation} className="max-h-[65vh]" />
@@ -377,11 +399,30 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
                     </span>
                   </span>
                 ) : (
-                  <span className="text-sm text-muted-foreground">
-                    none yet · {money(pricing.setupAmountCents, pricing.currency)} +{" "}
-                    {money(pricing.monthlyAmountCents, pricing.currency)}/mo
-                  </span>
+                  <span className="text-sm text-muted-foreground">none yet</span>
                 )}
+              </div>
+              <Separator />
+              <div>
+                <p className="mb-2 text-sm font-medium">Language</p>
+                <LeadLanguageForm
+                  leadId={dl.lead.id}
+                  language={leadRow.language}
+                  globalLanguage={persona.language}
+                  hasSpoken={hasSpoken}
+                />
+              </div>
+              <Separator />
+              <div>
+                <p className="mb-2 text-sm font-medium">Pricing</p>
+                <LeadPricingForm
+                  leadId={dl.lead.id}
+                  setupAmountCents={leadRow.setupAmountCents}
+                  monthlyAmountCents={leadRow.monthlyAmountCents}
+                  pricing={pricing}
+                  lockedReason={lockedReason}
+                  hasPendingOrder={dl.order?.status === "pending"}
+                />
               </div>
               <Separator />
               <div className="flex items-center justify-between gap-3">

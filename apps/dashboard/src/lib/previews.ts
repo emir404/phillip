@@ -1,3 +1,4 @@
+import type { Language } from "@nutz/phillip";
 import { nanoid } from "nanoid";
 import { db } from "../db/client";
 import { leads, previews } from "../db/schema";
@@ -23,6 +24,11 @@ export interface CreatePreviewInput {
   files?: { path: string; content: string }[];
   /** GitHub repo holding the site source: `owner/repo`, a URL, or a bare name. */
   repoUrl?: string;
+  /** Per-lead price overrides, in cents. Omit to inherit `settings.pricing`. */
+  setupAmountCents?: number;
+  monthlyAmountCents?: number;
+  /** The language Phillip speaks here. Omit to inherit `settings.persona`. */
+  language?: Language;
 }
 
 export class InvalidRepoError extends Error {
@@ -71,6 +77,9 @@ export async function createLeadWithPreview(input: CreatePreviewInput) {
     vercelProjectId: repo?.project?.projectId ?? input.vercelProjectId ?? null,
     repoUrl: repo?.url ?? null,
     repoBranch: repo?.branch ?? null,
+    setupAmountCents: input.setupAmountCents ?? null,
+    monthlyAmountCents: input.monthlyAmountCents ?? null,
+    language: input.language ?? null,
     createdAt: now,
     updatedAt: now,
   });

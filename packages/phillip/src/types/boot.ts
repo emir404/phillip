@@ -1,3 +1,4 @@
+import type { Language } from "../i18n/language";
 import type { Conversation } from "../intent/types";
 import type { Lead, LeadStage, Preview } from "./records";
 
@@ -12,6 +13,9 @@ export interface Persona {
   avatarVideoUrl?: string;
   /** Optional override for the opening line; otherwise composed client-side. */
   greeting?: string;
+  /** The language Phillip speaks to this lead. Absent on boots served before
+   *  the setting existed — the widget falls back to English. */
+  language?: Language;
 }
 
 export interface Offer {

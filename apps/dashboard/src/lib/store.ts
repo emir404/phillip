@@ -5,6 +5,7 @@ import type {
   DeviceContext,
   GeoContext,
   Intent,
+  Language,
   Lead,
   LeadStage,
   Message,
@@ -14,6 +15,7 @@ import type {
   Sentiment,
   Session,
 } from "@nutz/phillip";
+import { DEFAULT_LANGUAGE, coerceLanguage } from "@nutz/phillip/i18n";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "../db/client";
@@ -700,6 +702,32 @@ export async function seedConversation(
   });
 }
 
+/**
+ * Wipe a lead's chat thread — messages, intent, sentiment, quick replies — and
+ * report how many messages went. Everything else about the lead survives:
+ * events, engagement score, orders, iterations.
+ *
+ * The row goes too, not just its messages: `appendMessages` and the boot route
+ * both recreate it on demand, and boot re-seeds the opening greeting whenever
+ * the thread is empty. So the next visit starts the conversation over.
+ */
+export async function resetConversation(leadId: string): Promise<number> {
+  const convRows = await db
+    .select({ id: conversations.id })
+    .from(conversations)
+    .where(eq(conversations.leadId, leadId));
+  const convIds = convRows.map((c) => c.id);
+  if (convIds.length === 0) return 0;
+
+  const [count] = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(messages)
+    .where(inArray(messages.conversationId, convIds));
+  await db.delete(messages).where(inArray(messages.conversationId, convIds));
+  await db.delete(conversations).where(eq(conversations.leadId, leadId));
+  return count?.n ?? 0;
+}
+
 export async function setConversationQuickReplies(conversationId: string, qrs: QuickReply[]) {
   await db
     .update(conversations)
@@ -829,6 +857,20 @@ export async function listIterations() {
 
 // --- orders ---------------------------------------------------------------------
 
+/**
+ * The lead's most recent order. Every checkout click mints a fresh session and
+ * a fresh row, so the newest one is the only one that still reflects reality.
+ */
+export async function latestOrderForLead(leadId: string): Promise<OrderRow | undefined> {
+  const [row] = await db
+    .select()
+    .from(orders)
+    .where(eq(orders.leadId, leadId))
+    .orderBy(desc(orders.createdAt))
+    .limit(1);
+  return row;
+}
+
 export async function createOrder(input: {
   leadId: string;
   stripeSessionId: string;
@@ -912,6 +954,8 @@ export interface PersonaSettings {
   name: string;
   title: string;
   avatarUrl: string;
+  /** The language Phillip speaks unless a lead overrides it. */
+  language: Language;
 }
 
 export const DEFAULT_PRICING: PricingSettings = {
@@ -924,7 +968,30 @@ export const DEFAULT_PERSONA: PersonaSettings = {
   name: "Phillip",
   title: "founder · nutz",
   avatarUrl: "/phillip.jpg",
+  language: DEFAULT_LANGUAGE,
 };
+
+/**
+ * The global persona, with `language` guaranteed to be one we have copy for.
+ *
+ * `getSetting` returns whatever JSON the row holds, and every persona written
+ * before this feature has no `language` key — so the type would lie and
+ * `LANGUAGE_NAMES[persona.language]` would resolve to `undefined`. Coerce on
+ * read rather than backfilling the row; it heals itself the next time someone
+ * saves the form.
+ */
+export async function getPersona(): Promise<PersonaSettings> {
+  const stored = await getSetting<PersonaSettings>("persona", DEFAULT_PERSONA);
+  return { ...stored, language: coerceLanguage(stored.language) };
+}
+
+/** Which language a lead is spoken to: its own override, else the global one. */
+export function resolveLanguage(
+  leadLanguage: string | null | undefined,
+  personaLanguage: Language,
+): Language {
+  return coerceLanguage(leadLanguage, personaLanguage);
+}
 
 /** Remove a lead and every trace of it — previews, sessions, events, the
  *  conversation + messages, iterations, orders, escalations, site files, and

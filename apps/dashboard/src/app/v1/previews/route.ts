@@ -1,3 +1,4 @@
+import { LANGUAGES, isLanguage } from "@nutz/phillip/i18n";
 import { NextResponse } from "next/server";
 import { InvalidRepoError, createLeadWithPreview, previewResponse } from "../../../lib/previews";
 
@@ -14,7 +15,17 @@ interface CreatePreviewBody {
   vercelProjectId?: string;
   files?: { path: string; content: string }[];
   repoUrl?: string;
+  setupAmountCents?: number;
+  monthlyAmountCents?: number;
+  language?: string;
 }
+
+/** Omitted = inherit the global pricing. Present = must be whole, non-negative cents. */
+const validCents = (v: unknown): boolean =>
+  v === undefined || (typeof v === "number" && Number.isInteger(v) && v >= 0);
+
+/** Omitted = inherit the global persona's language. Present = a code we have copy for. */
+const validLanguage = (v: unknown): boolean => v === undefined || isLanguage(v);
 
 // Auto mode: the build agent registers the site it just generated and gets
 // back the preview id + the exact snippet to embed. Key-gated, server-to-server.
@@ -37,6 +48,18 @@ export async function POST(req: Request) {
   if (body.files && !body.files.every((f) => f?.path && typeof f.content === "string")) {
     return NextResponse.json({ error: "files must be [{path, content}]" }, { status: 400 });
   }
+  if (!validCents(body.setupAmountCents) || !validCents(body.monthlyAmountCents)) {
+    return NextResponse.json(
+      { error: "setupAmountCents/monthlyAmountCents must be non-negative integers" },
+      { status: 400 },
+    );
+  }
+  if (!validLanguage(body.language)) {
+    return NextResponse.json(
+      { error: `language must be one of: ${LANGUAGES.join(", ")}` },
+      { status: 400 },
+    );
+  }
 
   let created: { leadId: string; previewId: string };
   try {
@@ -50,6 +73,9 @@ export async function POST(req: Request) {
       vercelProjectId: body.vercelProjectId,
       files: body.files,
       repoUrl: body.repoUrl,
+      setupAmountCents: body.setupAmountCents,
+      monthlyAmountCents: body.monthlyAmountCents,
+      language: isLanguage(body.language) ? body.language : undefined,
     });
   } catch (err) {
     if (err instanceof InvalidRepoError) {
