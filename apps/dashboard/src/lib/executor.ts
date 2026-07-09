@@ -663,49 +663,72 @@ async function pollUntilReady(
   throw new Error("build_timeout");
 }
 
+/** The lead-facing URL of a project — a custom domain when it has one. */
+async function vercelProductionUrl(projectId: string): Promise<string | null> {
+  const token = vercelToken();
+  if (!token) return null;
+  try {
+    const res = await fetch(vercelUrl(`/v9/projects/${projectId}`), {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    return productionUrlOf((await res.json()) as VercelProject);
+  } catch {
+    return null;
+  }
+}
+
 /**
- * After a push, Vercel creates the production deployment for that commit. Find
- * it by SHA, then wait for the build. Both phases fail loudly and distinctly —
- * "we pushed but nothing built" is a very different problem from "it broke".
+ * The host rebuilds on push, so the commit we just made identifies its own
+ * deployment — no need to know which project it belongs to. Find it by SHA,
+ * wait for the build, and hand back the project it landed in.
+ *
+ * Only `build_error` / `build_canceled` mean the change failed. Not finding a
+ * deployment, or running out of patience, says nothing about the commit — the
+ * caller treats those as "shipped, still building".
  */
 async function waitForRepoDeployment(
-  projectId: string,
   commitSha: string,
   budgetMs: number,
-): Promise<{ deploymentId: string; url: string }> {
+  projectIdHint?: string | null,
+): Promise<{ deploymentId: string; url: string; projectId: string }> {
   const token = vercelToken();
   if (!token) throw new Error("PHILLIP_VERCEL_TOKEN is not configured");
 
   const started = Date.now();
   const findDeadline = started + Math.min(90_000, budgetMs * 0.4);
-  let deploymentId = "";
+  const scope = projectIdHint ? `&projectId=${projectIdHint}` : "";
+  let found: { uid: string; projectId: string } | null = null;
 
   while (Date.now() < findDeadline) {
     const res = await fetch(
-      vercelUrl(
-        `/v6/deployments?projectId=${projectId}&target=production&limit=20&meta-githubCommitSha=${commitSha}`,
-      ),
+      vercelUrl(`/v6/deployments?limit=50&meta-githubCommitSha=${commitSha}${scope}`),
       { headers: { authorization: `Bearer ${token}` } },
     );
     if (res.ok) {
       const body = (await res.json()) as {
-        deployments?: { uid: string; target?: string; meta?: { githubCommitSha?: string } }[];
+        deployments?: {
+          uid: string;
+          target?: string;
+          projectId?: string;
+          meta?: { githubCommitSha?: string };
+        }[];
       };
       const match = (body.deployments ?? []).find(
-        (d) => d.meta?.githubCommitSha === commitSha && d.target === "production",
+        (d) => d.meta?.githubCommitSha === commitSha && d.target === "production" && d.projectId,
       );
-      if (match) {
-        deploymentId = match.uid;
+      if (match?.projectId) {
+        found = { uid: match.uid, projectId: match.projectId };
         break;
       }
     }
     await sleep(3000);
   }
 
-  if (!deploymentId) throw new Error("deploy_not_created");
+  if (!found) throw new Error("deploy_not_created");
 
-  const url = await pollUntilReady(deploymentId, token, started + budgetMs);
-  return { deploymentId, url };
+  const url = await pollUntilReady(found.uid, token, started + budgetMs);
+  return { deploymentId: found.uid, url, projectId: found.projectId };
 }
 
 async function deployToVercel(
@@ -784,39 +807,45 @@ async function runRepoIteration(iteration: Iteration, lead: Lead): Promise<void>
     changes: [...ws.overlay.entries()].map(([path, content]) => ({ path, content })),
   });
 
-  // The commit is pushed and permanent from here on — every exit below must
-  // leave the iteration honest about that.
-  const project = lead.vercelProjectId
-    ? { projectId: lead.vercelProjectId, productionUrl: null as string | null }
-    : await findVercelProjectByRepo(lead.repoUrl ?? "");
-
-  if (!project) {
-    await updateIteration(iteration.id, {
-      status: "queued_manual",
-      statusReason: "no_vercel_project",
-      version: nextVersion,
-    });
-    return;
-  }
-  if (lead.vercelProjectId !== project.projectId) {
-    await updateLeadFields(lead.id, { vercelProjectId: project.projectId });
-  }
-  const publicUrl = preview?.url || project.productionUrl || "";
-  if (preview && !preview.url && project.productionUrl) {
-    await updatePreview(preview.id, { url: project.productionUrl });
-  }
+  // The commit is the durable half: refresh the page tomorrow and the change is
+  // still there. Now wait for the host to rebuild it, which is the half the
+  // lead can actually see. A pushed change is never handed back to a human.
+  let publicUrl = preview?.url ?? "";
+  let deploymentId: string | null = null;
+  let statusReason: string | null = null;
 
   const budget = Math.max(30_000, 285_000 - (Date.now() - startedAt));
-  const dep = await waitForRepoDeployment(project.projectId, commitSha, budget);
-  const resultUrl = `${publicUrl || `https://${dep.url}`}?v=${nextVersion}`;
+  try {
+    const dep = await waitForRepoDeployment(commitSha, budget, lead.vercelProjectId);
+    deploymentId = dep.deploymentId;
+
+    if (lead.vercelProjectId !== dep.projectId) {
+      await updateLeadFields(lead.id, { vercelProjectId: dep.projectId });
+    }
+    // First build tells us where this lead actually lives.
+    if (!publicUrl) {
+      publicUrl =
+        (await vercelProductionUrl(dep.projectId)) ?? (dep.url ? `https://${dep.url}` : "");
+      if (preview && publicUrl) await updatePreview(preview.id, { url: publicUrl });
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // A broken build is a real failure: the repo moved, the live page didn't.
+    if (msg.startsWith("build_error") || msg.startsWith("build_canceled")) throw err;
+    // Anything else — no deployment yet, our patience ran out — says nothing
+    // about the commit. It landed; the host will finish on its own schedule.
+    statusReason = "deploy_unobserved";
+  }
+
+  const resultUrl = `${publicUrl}?v=${nextVersion}`;
 
   if (preview) await updatePreview(preview.id, { version: nextVersion });
   await updateIteration(iteration.id, {
     status: "done",
-    statusReason: null,
+    statusReason,
     resultUrl,
     version: nextVersion,
-    deploymentId: dep.deploymentId,
+    deploymentId,
   });
   await insertBackendEvent(lead.id, iteration.sessionId ?? "backend", "iteration_ready", {
     iterationId: iteration.id,

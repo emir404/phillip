@@ -231,9 +231,7 @@ function Ready({
         setTaskPhase("manual");
         return;
       }
-      convo.appendPhillip(
-        "this one needs a human touch — my colleague is picking it up and will email you shortly.",
-      );
+      convo.appendPhillip("i'll take this one by hand — give me a little while.");
     },
   });
 

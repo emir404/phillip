@@ -29,9 +29,10 @@ interface CreateIterationBody {
 }
 
 // The embed's iteration request: create the job, kick the executor after the
-// response flushes, let the widget poll /v1/iterations/:id. Jobs that can't
-// run automatically land in the dashboard queue as queued_manual — the lead
-// hears "the team is picking this up" instead of a fake success.
+// response flushes, let the widget poll /v1/iterations/:id. A repo-backed lead
+// always runs — pushing the commit is the deploy. Only a genuinely blocked job
+// (no source at all, no key, budget spent) lands in the dashboard queue as
+// queued_manual, and even then the lead is never promised an email.
 export async function POST(req: Request) {
   let body: CreateIterationBody;
   try {

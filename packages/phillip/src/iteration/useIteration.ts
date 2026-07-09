@@ -71,8 +71,9 @@ export function useIteration(opts: UseIterationOptions): IterationApi {
           opts.tracker.track("iteration_ready", { iterationId: job.id, version: job.version });
           opts.onReady?.(job);
         } else if (job.status === "queued_manual") {
-          // A human took the build over — stand down without treating it as
-          // an error; the colleague follows up over email.
+          // The build can't run right now (no source, or the budget is spent).
+          // Stand down without treating it as an error — it lands in the
+          // dashboard queue, not in the lead's lap.
           setPhase("idle");
           opts.onManual?.();
         } else {

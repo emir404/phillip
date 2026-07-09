@@ -83,7 +83,7 @@ describe("Task", () => {
     ["working", "rebuilding your site…"],
     ["done", "live — take a look"],
     ["failed", "hmm, that one didn't take. try again?"],
-    ["manual", "my colleague is picking this one up — you'll get an email shortly."],
+    ["manual", "i'll take this one by hand — give me a little while."],
   ] as const)("renders the %s phase copy", (phase, copy) => {
     render(<Task phase={phase} />);
     expect(screen.getByText(copy)).toBeInTheDocument();

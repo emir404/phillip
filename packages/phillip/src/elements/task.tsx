@@ -14,7 +14,7 @@ const PHASE_COPY: Record<TaskPhase, string> = {
   working: "rebuilding your site…",
   done: "live — take a look",
   failed: "hmm, that one didn't take. try again?",
-  manual: "my colleague is picking this one up — you'll get an email shortly.",
+  manual: "i'll take this one by hand — give me a little while.",
 };
 
 // A real build takes minutes. Silence reads as broken, so the wait narrates
