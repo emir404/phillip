@@ -69,6 +69,7 @@ export function ActivityChart({
                 stroke="var(--color-messages)"
                 strokeWidth={1.5}
                 stackId="a"
+                isAnimationActive={false}
               />
               <Area
                 dataKey="events"
@@ -77,6 +78,7 @@ export function ActivityChart({
                 stroke="var(--color-events)"
                 strokeWidth={1.5}
                 stackId="a"
+                isAnimationActive={false}
               />
             </AreaChart>
           </ChartContainer>

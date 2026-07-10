@@ -1,7 +1,7 @@
 "use client";
 
 import type { DashboardLead } from "@/lib/types";
-import { type ReactNode, createContext, useContext, useEffect, useState } from "react";
+import { type ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
 
 // One poll for the whole authenticated app: the layout seeds this provider from
 // the store, then anything the agents push through the ingestion endpoints
@@ -12,6 +12,10 @@ const POLL_MS = 5000;
 type LiveLeads = { leads: DashboardLead[]; updatedAt: number };
 
 const LiveLeadsContext = createContext<LiveLeads | null>(null);
+// The last successful poll lives in its own context: it ticks every cycle,
+// and only the header's live indicator cares — keeping it out of the leads
+// context is what lets an unchanged payload leave the rest of the app alone.
+const LastSyncContext = createContext<number>(0);
 
 export function LiveLeadsProvider({
   initialLeads,
@@ -24,6 +28,8 @@ export function LiveLeadsProvider({
     leads: initialLeads,
     updatedAt: Date.now(),
   }));
+  const [lastSync, setLastSync] = useState(() => Date.now());
+  const lastPayload = useRef<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -31,8 +37,17 @@ export function LiveLeadsProvider({
       try {
         const res = await fetch("/v1/leads", { cache: "no-store" });
         if (!res.ok) return;
-        const next = (await res.json()) as DashboardLead[];
-        if (alive) setState({ leads: next, updatedAt: Date.now() });
+        const text = await res.text();
+        if (!alive) return;
+        setLastSync(Date.now());
+        // Identical payload → skip the parse and the state swap. Most polls
+        // land here, and without this every consumer of the context (KPIs,
+        // funnel, chart, both tables, the sidebar) re-rendered every 5s —
+        // the dashboard visibly twitched and, with a big event log, froze.
+        if (text === lastPayload.current) return;
+        lastPayload.current = text;
+        const next = JSON.parse(text) as DashboardLead[];
+        setState({ leads: next, updatedAt: Date.now() });
       } catch {
         // transient — keep the last good data and try again next tick.
       }
@@ -44,7 +59,11 @@ export function LiveLeadsProvider({
     };
   }, []);
 
-  return <LiveLeadsContext.Provider value={state}>{children}</LiveLeadsContext.Provider>;
+  return (
+    <LiveLeadsContext.Provider value={state}>
+      <LastSyncContext.Provider value={lastSync}>{children}</LastSyncContext.Provider>
+    </LiveLeadsContext.Provider>
+  );
 }
 
 export function useLiveLeads(): LiveLeads {
@@ -54,7 +73,7 @@ export function useLiveLeads(): LiveLeads {
 }
 
 export function LiveIndicator({ className }: { className?: string }) {
-  const { updatedAt } = useLiveLeads();
+  const updatedAt = useContext(LastSyncContext);
   const [now, setNow] = useState(updatedAt);
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
