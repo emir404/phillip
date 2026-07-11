@@ -35,8 +35,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!found) return corsJson({ error: "unknown preview" }, { status: 404 });
   const { lead, preview } = found;
 
-  // Once the lead has paid, the preview experience is over — the site is
-  // theirs. A silent boot mounts nothing: no bubble, no tracker, no session.
+  // Once the lead has paid (or the site is live) the preview experience is
+  // over: boot goes silent and the widget never mounts again — no chat bubble
+  // on a customer's finished site. The invoice reaches them via the Stripe
+  // webhook (thread message + emailed receipt); support runs through us
+  // directly, not the sales overlay.
   if (lead.stage === "paid" || lead.stage === "live") {
     return corsJson({ previewId: preview.id, silent: true });
   }
