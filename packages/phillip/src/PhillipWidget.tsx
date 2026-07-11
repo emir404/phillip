@@ -22,6 +22,7 @@ import { FunnelEmitter } from "./funnel";
 import { defaultGreeting, widgetCopy } from "./i18n";
 import type { Intent, Sentiment } from "./intent/types";
 import { MAX_INLINE_ROUNDS, captureChangeSet, isHeavyRequest, useIteration } from "./iteration";
+import { MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS, readAttachment } from "./lib/attachments";
 import { log } from "./lib/log";
 import { applyThemeVars } from "./mount";
 import { Vignette } from "./overlay/Vignette";
@@ -37,7 +38,7 @@ import { type Rect, captureRect } from "./takeover/morph";
 import type { TransportClient } from "./transport";
 import type { BootConfig } from "./types/boot";
 import type { PingReason } from "./types/events";
-import type { ElementTarget } from "./types/records";
+import type { Attachment, ElementTarget } from "./types/records";
 
 export interface PhillipWidgetProps {
   runtime: RuntimeConfig;
@@ -138,8 +139,8 @@ function Ready({
 
   // Submit one concrete ask through the heavy/round-cap gate. Returns false
   // when it was diverted to escalation instead of building.
-  const submitAsk = (text: string, target?: ElementTarget): boolean => {
-    const changeSet = captureChangeSet([], text, target);
+  const submitAsk = (text: string, target?: ElementTarget, attachments?: Attachment[]): boolean => {
+    const changeSet = captureChangeSet([], text, target, attachments);
     if (isHeavyRequest(changeSet) || roundRef.current >= MAX_INLINE_ROUNDS) {
       convo.appendPhillip(copy.heavyRequest);
       funnel.to("escalated", "heavy_or_round_cap");
@@ -150,6 +151,30 @@ function Ready({
     setTaskPhase("submitting");
     iteration.submit(changeSet);
     return true;
+  };
+
+  // Files picked in the floating chat's paperclip. Attaching IS requesting a
+  // change, so the takeover opens with the files pinned to its rail — the
+  // lead adds (or skips) the words there. Read errors surface in the thread;
+  // nothing opens for a pick that produced no usable attachment.
+  const preloadedAttachmentsRef = useRef<Attachment[]>([]);
+  const onComposerAttach = async (files: FileList) => {
+    const chosen = Array.from(files).slice(0, MAX_ATTACHMENTS);
+    const oversized = chosen.find((f) => f.size > MAX_ATTACHMENT_BYTES);
+    if (oversized) {
+      convo.appendSystem(copy.attachmentTooLarge(oversized.name), true);
+      return;
+    }
+    let read: Attachment[];
+    try {
+      read = await Promise.all(chosen.map(readAttachment));
+    } catch {
+      convo.appendSystem(copy.attachmentReadFailed, true);
+      return;
+    }
+    if (files.length > chosen.length) convo.appendSystem(copy.tooManyAttachments, true);
+    preloadedAttachmentsRef.current = read;
+    startIteration();
   };
 
   // Iteration entry — from a control event (with the backend's hint) or the
@@ -246,11 +271,12 @@ function Ready({
 
   // The rail's prompt (and its suggestion chips) route through the same gate
   // the auto-submit path uses; the rail stays open showing the build status.
-  // A picked element rides along as the change-set's target.
-  const onRailSubmit = (text: string, target?: ElementTarget) => {
+  // A picked element rides along as the change-set's target. Empty text is
+  // fine when a photo/file is attached ("here's my logo", no message needed).
+  const onRailSubmit = (text: string, target?: ElementTarget, attachments?: Attachment[]) => {
     const trimmed = text.trim();
-    if (!trimmed || iteration.busy) return;
-    submitAsk(trimmed, target);
+    if ((!trimmed && !attachments?.length) || iteration.busy) return;
+    submitAsk(trimmed, target, attachments);
   };
 
   // Leaving the takeover: if a build landed while it was open, walk the host
@@ -262,6 +288,7 @@ function Ready({
       window.location.href = landed;
       return;
     }
+    preloadedAttachmentsRef.current = [];
     setTaskPhase(null);
     // The rail glides home first; the stage lands right behind it.
     setStageEnterDelay(0.15);
@@ -401,6 +428,7 @@ function Ready({
         <Composer
           disabled={convo.streaming}
           onSend={(text) => convo.send({ text })}
+          onAttach={config.features.iteration ? (files) => void onComposerAttach(files) : undefined}
           language={config.persona.language}
         />
       </>
@@ -444,6 +472,7 @@ function Ready({
                 showSuggestions={iteration.round === 0 && !taskPhase && !convo.streaming}
                 busy={iteration.busy}
                 stageRect={stageRectRef.current}
+                initialAttachments={preloadedAttachmentsRef.current}
                 onSubmit={onRailSubmit}
                 onClose={closeTakeover}
               />

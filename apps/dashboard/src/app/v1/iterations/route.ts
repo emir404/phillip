@@ -1,6 +1,7 @@
 import type { ChangeSet } from "@nutz/phillip";
 import { after } from "next/server";
 import { budgetCapUsd } from "../../../lib/anthropic";
+import { storeAsset } from "../../../lib/assets";
 import { corsJson, preflight } from "../../../lib/cors";
 import { runIteration } from "../../../lib/executor";
 import { githubToken, parseRepo } from "../../../lib/github";
@@ -28,6 +29,10 @@ interface CreateIterationBody {
   sessionId?: string;
 }
 
+// Mirrors the widget's client-side cap (Takeover) — enforced here too so a
+// hand-rolled request can't ship an unbounded pile of files to the executor.
+const MAX_ATTACHMENTS = 5;
+
 // The embed's iteration request: create the job, kick the executor after the
 // response flushes, let the widget poll /v1/iterations/:id. A repo-backed lead
 // always runs — pushing the commit is the deploy. Only a genuinely blocked job
@@ -42,6 +47,12 @@ export async function POST(req: Request) {
   }
   if (!body?.previewId || !body?.changeSet) {
     return corsJson({ error: "previewId and changeSet required" }, { status: 400 });
+  }
+  if ((body.changeSet.attachments?.length ?? 0) > MAX_ATTACHMENTS) {
+    return corsJson(
+      { error: `at most ${MAX_ATTACHMENTS} attachments per change request` },
+      { status: 400 },
+    );
   }
 
   const found = await getLeadByPreviewId(body.previewId);
@@ -76,12 +87,28 @@ export async function POST(req: Request) {
     statusReason = "no_api_key";
   }
 
+  // Attachments arrive as `data:` URLs (read client-side, never touching
+  // disk) — persist them once here and swap in a real hosted URL, so neither
+  // the DB row nor the executor's prompt ever carries the base64 payload
+  // around.
+  let changeSet = body.changeSet;
+  if (changeSet.attachments?.length) {
+    const origin = new URL(req.url).origin;
+    const hosted = await Promise.all(
+      changeSet.attachments.map(async (a) => ({
+        ...a,
+        url: `${origin}/v1/assets/${await storeAsset(a.url)}`,
+      })),
+    );
+    changeSet = { ...changeSet, attachments: hosted };
+  }
+
   const iteration = await createIteration({
     leadId: lead.id,
     previewId: body.previewId,
     sessionId: body.sessionId,
     round: body.round ?? 1,
-    changeSet: body.changeSet,
+    changeSet,
     status,
     statusReason,
   });

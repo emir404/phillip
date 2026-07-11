@@ -19,12 +19,13 @@ import {
 import { widgetCopy } from "../i18n";
 import type { Message } from "../intent/types";
 import { ITERATION_OPTIONS } from "../iteration";
+import { MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS, readAttachment } from "../lib/attachments";
 import { cn } from "../lib/cn";
 import { useViewportInset } from "../lib/useViewportInset";
 import { exitTween, spring } from "../overlay/motion";
 import type { Persona } from "../types/boot";
-import type { ElementTarget } from "../types/records";
-import { Chevron, Close, Crosshair, Dismiss } from "../ui/icons";
+import type { Attachment, ElementTarget } from "../types/records";
+import { Chevron, Close, Crosshair, Dismiss, FileIcon, Paperclip, PhotoIcon } from "../ui/icons";
 import {
   MOBILE_BP,
   type MorphCustom,
@@ -66,9 +67,13 @@ export interface TakeoverProps {
   busy: boolean;
   /** The floating stage's box at switch time — the morph's starting rect. */
   stageRect: Rect | null;
-  onSubmit: (text: string, target?: ElementTarget) => void;
+  /** Files already read in the floating chat's composer — pinned to the rail
+   *  at mount so the lead only has to say what they're for. */
+  initialAttachments?: Attachment[];
+  onSubmit: (text: string, target?: ElementTarget, attachments?: Attachment[]) => void;
   onClose: () => void;
 }
+
 
 const backdrop = (reduce: boolean) => ({
   initial: { opacity: 0 },
@@ -97,6 +102,7 @@ export function Takeover({
   showSuggestions,
   busy,
   stageRect,
+  initialAttachments,
   onSubmit,
   onClose,
 }: TakeoverProps) {
@@ -129,6 +135,40 @@ export function Takeover({
   const animate = morphing ? { ...enter.animate, height: sheetH } : enter.animate;
 
   const keyboard = useViewportInset(isMobile);
+
+  // --- attachments ------------------------------------------------------------
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>(
+    () => initialAttachments ?? [],
+  );
+  const [attachError, setAttachError] = useState<string | null>(null);
+
+  const onFilesChosen = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setAttachError(null);
+    const room = MAX_ATTACHMENTS - pendingAttachments.length;
+    if (room <= 0) {
+      setAttachError(copy.tooManyAttachments);
+      return;
+    }
+    const chosen = Array.from(files).slice(0, room);
+    const oversized = chosen.find((f) => f.size > MAX_ATTACHMENT_BYTES);
+    if (oversized) {
+      setAttachError(copy.attachmentTooLarge(oversized.name));
+      return;
+    }
+    try {
+      const read = await Promise.all(chosen.map(readAttachment));
+      setPendingAttachments((p) => [...p, ...read]);
+      if (files.length > chosen.length) setAttachError(copy.tooManyAttachments);
+    } catch {
+      setAttachError(copy.attachmentReadFailed);
+    }
+  };
+
+  const removePendingAttachment = (name: string) => {
+    setPendingAttachments((p) => p.filter((a) => a.name !== name));
+  };
 
   // --- element picker -------------------------------------------------------
   const frameRef = useRef<HTMLIFrameElement | null>(null);
@@ -372,13 +412,58 @@ export function Takeover({
                 {isMobile ? copy.pickHintTouch : copy.pickHintMouse}
               </div>
             ) : null}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,.pdf"
+              multiple
+              hidden
+              onChange={(e) => {
+                void onFilesChosen(e.target.files);
+                e.target.value = "";
+              }}
+            />
             <PromptInput
               onSubmit={(text) => {
-                onSubmit(text, target ?? undefined);
+                onSubmit(
+                  text,
+                  target ?? undefined,
+                  pendingAttachments.length ? pendingAttachments : undefined,
+                );
                 setTarget(null);
+                setPendingAttachments([]);
               }}
               disabled={busy}
+              hasAttachments={pendingAttachments.length > 0}
             >
+              {pendingAttachments.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5 self-start">
+                  {pendingAttachments.map((a) => (
+                    <div
+                      key={a.name}
+                      className="group relative flex items-center gap-1 rounded-md bg-white/10 px-2 py-1 text-[11px] text-white/70"
+                    >
+                      {a.mediaType.startsWith("image/") ? (
+                        <PhotoIcon size={13} />
+                      ) : (
+                        <FileIcon size={13} />
+                      )}
+                      <span className="max-w-[140px] truncate">{a.name}</span>
+                      <button
+                        type="button"
+                        aria-label={copy.removeAttachment(a.name)}
+                        onClick={() => removePendingAttachment(a.name)}
+                        className="text-white/50 transition hover:text-white/85"
+                      >
+                        <Dismiss size={10} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {attachError ? (
+                <div className="self-start text-[11px] text-red-400">{attachError}</div>
+              ) : null}
               {target ? (
                 <div className="flex items-center gap-1.5 self-start rounded-md bg-brand-600/15 px-2 py-1 text-[11px] text-brand-300">
                   <Crosshair size={11} />
@@ -403,28 +488,39 @@ export function Takeover({
               />
               <PromptInputToolbar
                 leading={
-                  canPick ? (
+                  <div className="flex items-center gap-0.5">
                     <button
                       type="button"
-                      aria-label={copy.pickElement}
-                      aria-pressed={pickerOn}
-                      disabled={busy}
-                      onClick={() => {
-                        setPickerOn((on) => {
-                          // Picking means touching the site — get out of its way.
-                          if (!on && isMobile) setExpanded(false);
-                          return !on;
-                        });
-                      }}
-                      className={
-                        pickerOn
-                          ? "grid size-7 place-items-center rounded-full bg-brand-600/20 text-brand-300 transition disabled:opacity-40"
-                          : "grid size-7 place-items-center rounded-full text-white/45 transition hover:text-white/85 disabled:opacity-40"
-                      }
+                      aria-label={copy.attachFile}
+                      disabled={busy || pendingAttachments.length >= MAX_ATTACHMENTS}
+                      onClick={() => fileInputRef.current?.click()}
+                      className="grid size-7 place-items-center rounded-full text-white/45 transition hover:text-white/85 disabled:opacity-40"
                     >
-                      <Crosshair size={14} />
+                      <Paperclip size={14} />
                     </button>
-                  ) : undefined
+                    {canPick ? (
+                      <button
+                        type="button"
+                        aria-label={copy.pickElement}
+                        aria-pressed={pickerOn}
+                        disabled={busy}
+                        onClick={() => {
+                          setPickerOn((on) => {
+                            // Picking means touching the site — get out of its way.
+                            if (!on && isMobile) setExpanded(false);
+                            return !on;
+                          });
+                        }}
+                        className={
+                          pickerOn
+                            ? "grid size-7 place-items-center rounded-full bg-brand-600/20 text-brand-300 transition disabled:opacity-40"
+                            : "grid size-7 place-items-center rounded-full text-white/45 transition hover:text-white/85 disabled:opacity-40"
+                        }
+                      >
+                        <Crosshair size={14} />
+                      </button>
+                    ) : null}
+                  </div>
                 }
               >
                 <PromptInputSubmit disabled={busy} />

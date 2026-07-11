@@ -1,4 +1,10 @@
-import type { ChangeItem, ChangeKind, ChangeSet, ElementTarget } from "../types/records";
+import type {
+  Attachment,
+  ChangeItem,
+  ChangeKind,
+  ChangeSet,
+  ElementTarget,
+} from "../types/records";
 
 // The guided options Phillip offers for an inline tweak. Each maps to a light
 // ChangeKind the Build agent can turn around without a human.
@@ -25,11 +31,12 @@ export const ITERATION_OPTIONS: IterationOption[] = [
 export const MAX_INLINE_ROUNDS = 3;
 
 /** Structure the selected guided options + free text (+ a picked element,
- *  when the lead pointed at one) into a change-set. */
+ *  when the lead pointed at one, + any attached photos/files) into a change-set. */
 export function captureChangeSet(
   selected: IterationOption[],
   freeText?: string,
   target?: ElementTarget,
+  attachments?: Attachment[],
 ): ChangeSet {
   const items: ChangeItem[] = selected.map((o) => ({
     kind: o.kind,
@@ -37,7 +44,12 @@ export function captureChangeSet(
     value: o.value,
   }));
   const ft = freeText?.trim();
-  return { items, freeText: ft ? ft : undefined, target };
+  return {
+    items,
+    freeText: ft ? ft : undefined,
+    target,
+    attachments: attachments?.length ? attachments : undefined,
+  };
 }
 
 // The light/heavy boundary. Guided options are always light; only the free-text

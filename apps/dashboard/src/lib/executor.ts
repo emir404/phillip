@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { previews } from "../db/schema";
 import { EXECUTOR_MODEL, anthropic, recordModelUsage } from "./anthropic";
+import { getAsset } from "./assets";
 import {
   type RepoRef,
   type TreeEntry,
@@ -148,7 +149,66 @@ function changeRequestLines(changeSet: ChangeSet): string[] {
       }${t.section ? ` inside the "${t.section}" section` : ""} — the change is about THIS element.`,
     );
   }
+  if (changeSet.attachments?.length) {
+    const plural = changeSet.attachments.length > 1;
+    parts.push(
+      [
+        `- the customer attached ${plural ? "these files" : "this file"} (shown above so you can`,
+        "read the content), each already hosted at the URL below. Decide per attachment:",
+        "if it CONTAINS site content (a menu, price list, opening hours, a flyer), read it and",
+        "update the page's actual copy — items, prices, hours, sections — to match what it says,",
+        "transcribing faithfully; don't invent items or prices that aren't in the file. If it IS",
+        "the content (a logo, a photo of the place, a dish), insert an <img> tag with that exact",
+        "hosted src wherever it belongs, sized sensibly for the spot (e.g. a logo in the nav",
+        "should be a fixed height like 32px, not full width) — don't invent a different image.",
+        "If the request doesn't say which, infer from the file itself — a photographed menu",
+        "means update the menu content, not paste the photo.",
+      ].join(" "),
+    );
+    for (const a of changeSet.attachments) parts.push(`  - ${a.name} (${a.mediaType}): ${a.url}`);
+  }
   return parts;
+}
+
+// ---------------------------------------------------------------------------
+// Attachment content — let the model SEE what the customer sent
+// ---------------------------------------------------------------------------
+
+/** Image media types the Messages API accepts as vision blocks. */
+const VISION_MEDIA_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+
+/**
+ * The hosted attachment URLs in the change set point at rows in the assets
+ * table (/v1/assets/:id). Load those bytes back and hand them to the model as
+ * real content blocks — images as vision, PDFs as documents — so a
+ * photographed menu can rewrite the site's copy instead of just landing as an
+ * <img> tag. Unsupported types simply get no block; the URL note still covers
+ * them.
+ */
+async function attachmentContentBlocks(changeSet: ChangeSet): Promise<ContentBlocks> {
+  const blocks = [] as unknown as ContentBlocks;
+  for (const a of changeSet.attachments ?? []) {
+    const id = a.url.split("/").pop();
+    if (!id) continue;
+    const asset = await getAsset(id).catch(() => undefined);
+    if (!asset) continue;
+    if (VISION_MEDIA_TYPES.has(asset.mediaType)) {
+      blocks.push({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: asset.mediaType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+          data: asset.bytesBase64,
+        },
+      });
+    } else if (asset.mediaType === "application/pdf") {
+      blocks.push({
+        type: "document",
+        source: { type: "base64", media_type: "application/pdf", data: asset.bytesBase64 },
+      });
+    }
+  }
+  return blocks;
 }
 
 // ---------------------------------------------------------------------------
@@ -228,7 +288,13 @@ async function applyWithClaude(
   const client = anthropic();
 
   const messages: Msg[] = [
-    { role: "user", content: [{ type: "text", text: changeSetPrompt(changeSet, files) }] },
+    {
+      role: "user",
+      content: [
+        ...(await attachmentContentBlocks(changeSet)),
+        { type: "text", text: changeSetPrompt(changeSet, files) },
+      ],
+    },
   ];
   let summary = "changes applied";
 
@@ -465,7 +531,15 @@ async function editRepoWithClaude(
     "Read the files you need, then make the change.",
   ].join("\n");
 
-  const messages: Msg[] = [{ role: "user", content: [{ type: "text", text: opening }] }];
+  const messages: Msg[] = [
+    {
+      role: "user",
+      content: [
+        ...(await attachmentContentBlocks(changeSet)),
+        { type: "text", text: opening },
+      ],
+    },
+  ];
   let summary = "changes applied";
 
   for (let turn = 0; turn < 12; turn++) {

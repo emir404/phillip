@@ -29,6 +29,9 @@ interface PromptInputContextValue {
   value: string;
   setValue: (next: string) => void;
   disabled: boolean;
+  /** True when there's something else to submit besides text (e.g. a
+   *  pending attachment) — lets an empty textarea still count as submittable. */
+  hasAttachments: boolean;
   submit: () => void;
 }
 
@@ -42,14 +45,19 @@ function usePromptInput(component: string): PromptInputContextValue {
 
 export interface PromptInputProps
   extends Omit<FormHTMLAttributes<HTMLFormElement>, "onSubmit" | "onChange"> {
-  /** Called with the trimmed text; the textarea clears itself afterwards. */
+  /** Called with the trimmed text (possibly empty, if hasAttachments); the
+   *  textarea clears itself afterwards. */
   onSubmit: (text: string) => void;
   disabled?: boolean;
+  /** True when there's a pending attachment — an empty textarea is still
+   *  submittable ("here's my logo", no message). */
+  hasAttachments?: boolean;
 }
 
 export function PromptInput({
   onSubmit,
   disabled = false,
+  hasAttachments = false,
   className,
   children,
   ...props
@@ -58,7 +66,7 @@ export function PromptInput({
 
   const submit = () => {
     const text = value.trim();
-    if (!text || disabled) return;
+    if ((!text && !hasAttachments) || disabled) return;
     setValue("");
     onSubmit(text);
   };
@@ -69,7 +77,7 @@ export function PromptInput({
   };
 
   return (
-    <PromptInputContext.Provider value={{ value, setValue, disabled, submit }}>
+    <PromptInputContext.Provider value={{ value, setValue, disabled, hasAttachments, submit }}>
       <form
         onSubmit={handleSubmit}
         className={cn(
@@ -168,12 +176,12 @@ export function PromptInputToolbar({
 export type PromptInputSubmitProps = ButtonHTMLAttributes<HTMLButtonElement>;
 
 export function PromptInputSubmit({ className, children, ...props }: PromptInputSubmitProps) {
-  const { value, disabled } = usePromptInput("PromptInputSubmit");
+  const { value, disabled, hasAttachments } = usePromptInput("PromptInputSubmit");
   return (
     <button
       type="submit"
       aria-label="Send"
-      disabled={disabled || value.trim().length === 0}
+      disabled={disabled || (value.trim().length === 0 && !hasAttachments)}
       className={cn(
         // Raised porcelain button off the Figma rail: light disc, inset top
         // highlight, soft drop shadow.

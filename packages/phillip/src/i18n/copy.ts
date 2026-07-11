@@ -26,6 +26,11 @@ export interface WidgetCopy {
   pickHintMouse: string;
   clearPicked: string;
   pickElement: string;
+  attachFile: string;
+  removeAttachment: (name: string) => string;
+  tooManyAttachments: string;
+  attachmentTooLarge: (name: string) => string;
+  attachmentReadFailed: string;
   // --- Phillip, speaking from the client ---
   heavyRequest: string;
   iterationDone: string;
@@ -55,6 +60,11 @@ const COPY: Record<Language, WidgetCopy> = {
     pickHintMouse: "click any part of your site — esc cancels",
     clearPicked: "clear picked element",
     pickElement: "pick an element",
+    attachFile: "attach a photo or file",
+    removeAttachment: (name) => `remove ${name}`,
+    tooManyAttachments: "up to 5 files at a time",
+    attachmentTooLarge: (name) => `${name} is too large (max 4MB)`,
+    attachmentReadFailed: "couldn't read that file",
     heavyRequest:
       "that's a bigger change and worth doing right. drop your email and my colleague will pick it up.",
     iterationDone: "done — tap to see it ✨",
@@ -83,6 +93,11 @@ const COPY: Record<Language, WidgetCopy> = {
     pickHintMouse: "Klicken Sie auf einen Bereich Ihrer Seite — Esc bricht ab",
     clearPicked: "Auswahl aufheben",
     pickElement: "Element auswählen",
+    attachFile: "Foto oder Datei anhängen",
+    removeAttachment: (name) => `${name} entfernen`,
+    tooManyAttachments: "Maximal 5 Dateien auf einmal",
+    attachmentTooLarge: (name) => `${name} ist zu groß (max. 4 MB)`,
+    attachmentReadFailed: "Diese Datei konnte nicht gelesen werden",
     heavyRequest:
       "Das ist eine größere Änderung, und die sollte man richtig machen. Hinterlassen Sie mir Ihre E-Mail-Adresse, dann übernimmt mein Kollege.",
     iterationDone: "Fertig — tippen Sie, um es zu sehen ✨",
@@ -112,6 +127,11 @@ const COPY: Record<Language, WidgetCopy> = {
     pickHintMouse: "Cliquez sur n'importe quelle partie de votre site — Échap annule",
     clearPicked: "Effacer l'élément sélectionné",
     pickElement: "Sélectionner un élément",
+    attachFile: "Joindre une photo ou un fichier",
+    removeAttachment: (name) => `Retirer ${name}`,
+    tooManyAttachments: "5 fichiers maximum à la fois",
+    attachmentTooLarge: (name) => `${name} est trop volumineux (max 4 Mo)`,
+    attachmentReadFailed: "Impossible de lire ce fichier",
     heavyRequest:
       "C'est une modification plus importante, et elle mérite d'être bien faite. Laissez-moi votre e-mail, mon collègue s'en occupera.",
     iterationDone: "C'est fait — touchez pour voir ✨",
@@ -140,6 +160,11 @@ const COPY: Record<Language, WidgetCopy> = {
     pickHintMouse: "Haga clic en cualquier parte de su sitio — Esc cancela",
     clearPicked: "Quitar el elemento seleccionado",
     pickElement: "Seleccionar un elemento",
+    attachFile: "Adjuntar una foto o un archivo",
+    removeAttachment: (name) => `Quitar ${name}`,
+    tooManyAttachments: "Hasta 5 archivos a la vez",
+    attachmentTooLarge: (name) => `${name} es demasiado grande (máx. 4 MB)`,
+    attachmentReadFailed: "No se pudo leer ese archivo",
     heavyRequest:
       "Ese es un cambio más grande y merece hacerse bien. Déjeme su correo y mi compañero se encargará.",
     iterationDone: "Listo — toque para verlo ✨",
@@ -168,6 +193,11 @@ const COPY: Record<Language, WidgetCopy> = {
     pickHintMouse: "Clicchi su un punto qualsiasi del suo sito — Esc annulla",
     clearPicked: "Rimuovi l'elemento selezionato",
     pickElement: "Seleziona un elemento",
+    attachFile: "Allega una foto o un file",
+    removeAttachment: (name) => `Rimuovi ${name}`,
+    tooManyAttachments: "Massimo 5 file alla volta",
+    attachmentTooLarge: (name) => `${name} è troppo grande (max 4 MB)`,
+    attachmentReadFailed: "Impossibile leggere il file",
     heavyRequest:
       "È una modifica più grande e merita di essere fatta bene. Mi lasci la sua email e se ne occuperà un mio collega.",
     iterationDone: "Fatto — tocchi per vederlo ✨",
@@ -196,6 +226,11 @@ const COPY: Record<Language, WidgetCopy> = {
     pickHintMouse: "Klik op een willekeurig deel van uw site — Esc annuleert",
     clearPicked: "Selectie wissen",
     pickElement: "Een element kiezen",
+    attachFile: "Foto of bestand bijvoegen",
+    removeAttachment: (name) => `${name} verwijderen`,
+    tooManyAttachments: "Maximaal 5 bestanden tegelijk",
+    attachmentTooLarge: (name) => `${name} is te groot (max. 4 MB)`,
+    attachmentReadFailed: "Dat bestand kon niet worden gelezen",
     heavyRequest:
       "Dat is een grotere aanpassing, en die verdient het om goed gedaan te worden. Laat uw e-mailadres achter, dan pakt mijn collega het op.",
     iterationDone: "Klaar — tik om het te bekijken ✨",
@@ -224,6 +259,11 @@ const COPY: Record<Language, WidgetCopy> = {
     pickHintMouse: "Clique em qualquer parte do seu site — Esc cancela",
     clearPicked: "Limpar o elemento selecionado",
     pickElement: "Selecionar um elemento",
+    attachFile: "Anexar uma foto ou ficheiro",
+    removeAttachment: (name) => `Remover ${name}`,
+    tooManyAttachments: "Até 5 ficheiros de cada vez",
+    attachmentTooLarge: (name) => `${name} é demasiado grande (máx. 4 MB)`,
+    attachmentReadFailed: "Não foi possível ler esse ficheiro",
     heavyRequest:
       "Essa é uma alteração maior e merece ser bem feita. Deixe-me o seu e-mail e o meu colega trata disso.",
     iterationDone: "Pronto — toque para ver ✨",

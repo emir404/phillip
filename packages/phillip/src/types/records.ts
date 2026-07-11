@@ -113,11 +113,24 @@ export interface ElementTarget {
   section?: string;
 }
 
+/**
+ * A photo/file the lead attached to a change request (e.g. "use this as my
+ * logo"). `url` starts as a client-side `data:` URL — the executor never
+ * needs the bytes, just something it can point Claude at, so the server
+ * swaps this for a real hosted URL before the request is persisted/executed.
+ */
+export interface Attachment {
+  name: string;
+  mediaType: string;
+  url: string;
+}
+
 export interface ChangeSet {
   items: ChangeItem[];
   freeText?: string;
   /** Set when the lead picked a specific element to scope the ask to. */
   target?: ElementTarget;
+  attachments?: Attachment[];
 }
 
 /** `queued_manual` = a human took the build over; the widget stops waiting. */

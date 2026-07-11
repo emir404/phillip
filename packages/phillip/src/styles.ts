@@ -435,6 +435,13 @@ export const styles = `
 .composer button:disabled { opacity: .35; cursor: default; filter: blur(.2px); transform: scale(.92); }
 .composer button:not(:disabled):hover { filter: brightness(1.07); }
 .composer button:not(:disabled):active { transform: scale(.93); }
+/* Ghost paperclip — quiet next to the loud send circle. */
+.composer:has(button.attach) { padding-left: 6px; }
+.composer button.attach {
+  background: transparent; color: var(--p-muted);
+  width: 32px; height: 32px; box-shadow: none;
+}
+.composer button.attach:not(:disabled):hover { color: var(--p-fg); filter: none; background: rgba(0,0,0,.05); }
 
 /* --- sub-flow glass card (iteration / checkout / escalation / setup) --- */
 .stage-card {

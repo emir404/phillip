@@ -19,6 +19,6 @@ export default function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!login|api/auth|api/stripe|v1/preview/|v1/previews|v1/events|v1/conversations|v1/iterations|v1/escalations|v1/checkout|v1/ingest|phillip\\.js|_next|favicon\\.ico|.*\\.(?:png|jpg|jpeg|svg|ico|webp|js|css|map|txt|webmanifest)$).*)",
+    "/((?!login|api/auth|api/stripe|v1/preview/|v1/previews|v1/events|v1/conversations|v1/iterations|v1/escalations|v1/checkout|v1/ingest|v1/assets|phillip\\.js|_next|favicon\\.ico|.*\\.(?:png|jpg|jpeg|svg|ico|webp|js|css|map|txt|webmanifest)$).*)",
   ],
 };

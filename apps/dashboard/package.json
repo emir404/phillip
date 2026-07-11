@@ -10,7 +10,7 @@
     "db:push": "drizzle-kit push",
     "db:seed": "node --env-file-if-exists=.env.local --import tsx scripts/seed.ts",
     "db:studio": "drizzle-kit studio",
-    "build": "pnpm --filter @nutz/phillip build && node scripts/copy-embed.mjs && next build",
+    "build": "pnpm --filter @nutz/phillip build && node scripts/copy-embed.mjs && node scripts/ensure-assets-table.mjs && next build",
     "embed": "pnpm --filter @nutz/phillip build && node scripts/copy-embed.mjs",
     "start": "next start -p 5174",
     "typecheck": "tsc --noEmit"
